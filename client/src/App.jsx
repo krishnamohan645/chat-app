@@ -1,50 +1,61 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import MainLayout from "./components/layout/MainLayout";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ChatList from "./pages/ChatList";
-import Chat from "./pages/Chat";
-import GroupChat from "./pages/GroupChat";
-import Groups from "./pages/Groups";
-import Notifications from "./pages/Notifications";
-import Profile from "./pages/Profile";
-import EditProfile from "./pages/EditProfile";
-import Settings from "./pages/Settings";
-import UserSearch from "./pages/UserSearch";
-import AudioCall from "./pages/AudioCall";
-import VideoCall from "./pages/VideoCall";
-import NotFound from "./pages/NotFound";
+import { useDispatch, useSelector } from "react-redux";
+import { useEffect } from "react";
+import { initAuth } from "./features/auth/authSlice";
+import AuthWatcher from "./AuthWatcher";
+import AppRoutes from "./routes/AppRoutes";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import {  initSocket } from "./socket/socket";
+import { setMyUserId } from "./features/chats/chatSlice";
 
 const App = () => {
+  const dispatch = useDispatch();
+  const { authLoading } = useSelector((state) => state.auth);
+  const { user, accessToken } = useSelector((state) => state.auth);
+  console.log(user, "user in app");
+
+  useEffect(() => {
+    dispatch(initAuth());
+  }, [dispatch]);
+
+
+useEffect(() => {
+  if (!user || !accessToken) return;
+
+  const socket = initSocket(user.id);
+
+  const joinUser = () => {
+    console.log("👤 EMITTING join-user:", user.id);
+    socket.emit("join-user", user.id);
+  };
+
+  if (socket.connected) joinUser();
+  socket.on("connect", joinUser);
+
+  return () => socket.off("connect", joinUser);
+}, [user?.id, accessToken]);
+
+  useEffect(() => {
+    if (user?.id) {
+      dispatch(setMyUserId(user.id));
+    }
+  }, [user?.id, dispatch]);
+
+  // 🔥 BLOCK ALL ROUTES UNTIL AUTH IS READY
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Auth Routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-
-        {/* Main App Routes */}
-        <Route element={<MainLayout />}>
-          <Route path="/chats" element={<ChatList />} />
-          <Route path="/chat/:id" element={<Chat />} />
-          <Route path="/groups" element={<Groups />} />
-          <Route path="/group/:id" element={<GroupChat />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/profile/edit" element={<EditProfile />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/search" element={<UserSearch />} />
-        </Route>
-
-        {/* Call Routes (Fullscreen) */}
-        <Route path="/call/audio" element={<AudioCall />} />
-        <Route path="/call/video" element={<VideoCall />} />
-
-        {/* Redirects */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+    <>
+      <ToastContainer position="top-right" autoClose={2000} />
+      <AuthWatcher />
+      <AppRoutes />
+    </>
   );
 };
 

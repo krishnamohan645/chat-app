@@ -73,12 +73,34 @@ const readMessage = async (req, res, next) => {
 
 const sendFileMessage = async (req, res, next) => {
   try {
-    const msg = await messageService.sendFileMessage(
+    if (!req.files || req.files.length === 0) {
+      throw new Error("Atleast one file is required");
+    }
+
+    let messages = [];
+    for (const file of req.files) {
+      const msg = await messageService.sendFileMessage(
+        req.params.chatId,
+        req.user.id,
+        file,
+      );
+      messages.push(msg);
+    }
+
+    res.status(201).json(messages);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const searchMessages = async (req, res, next) => {
+  try {
+    const msgs = await messageService.searchMessages(
       req.params.chatId,
       req.user.id,
-      req.file,
-    );
-    res.status(201).json({ msg });
+      req.query.search
+    )
+    res.json(msgs);
   } catch (err) {
     next(err);
   }
@@ -92,4 +114,5 @@ module.exports = {
   deleteMessageForMe,
   readMessage,
   sendFileMessage,
+  searchMessages
 };

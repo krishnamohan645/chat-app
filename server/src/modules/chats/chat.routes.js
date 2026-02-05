@@ -18,5 +18,7 @@ router.delete(
 router.post("/:chatId/leave", authMiddleware, chatController.leaveGroup);
 router.put("/:chatId/mute", authMiddleware, chatController.muteChat);
 router.put("/:chatId/unmute", authMiddleware, chatController.unMuteChat);
+router.get('/search', authMiddleware, chatController.searchChats)
+router.get("/list", authMiddleware, chatController.getChatList)
 
 module.exports = router;

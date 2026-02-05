@@ -1,16 +1,43 @@
+const { Op } = require("sequelize");
 const {
   Chats,
   Messages,
   MessageStatus,
   GroupMembers,
+  BlockedUser,
 } = require("../../models");
 const { notifyOnNewMessage } = require("../../notification/notificationHook");
 const { getIO, isUserOnline } = require("../../socket/socket");
 const { isMember } = require("../chats/chat.service");
 
+const getprivateChat = async (chatId, senderId) => {
+  const members = await GroupMembers.findAll({
+    where: {
+      chatId,
+      leftAt: null,
+    },
+  });
+  if (members.length !== 2) return null;
+  return members.find((m) => m.userId !== senderId)?.userId;
+};
+
 const sendMessage = async (chatId, userId, content) => {
+  console.log("🔥 sendMessage() CALLED");
   await isMember(chatId, userId);
 
+  const receiverId = await getprivateChat(chatId, userId);
+
+  if (receiverId) {
+    const isBlocked = await BlockedUser.findOne({
+      where: {
+        [Op.or]: [
+          { blockerId: userId, blockedId: receiverId },
+          { blockerId: receiverId, blockedId: userId },
+        ],
+      },
+    });
+    if (isBlocked) throw new Error("You cannot send message to this user");
+  }
   const msg = await Messages.create({
     chatId,
     senderId: userId,
@@ -20,7 +47,7 @@ const sendMessage = async (chatId, userId, content) => {
 
   const members = await GroupMembers.findAll({
     where: { chatId, leftAt: null, userId: { [Op.ne]: userId } },
-    include: ["userId"],
+    // include: ["userId"],
   });
 
   await MessageStatus.bulkCreate(
@@ -40,6 +67,36 @@ const sendMessage = async (chatId, userId, content) => {
 
   // realtime chat message
   getIO().to(`chat-${chatId}`).emit("new-message", msg);
+  console.log("🔥 emitting chat-list:update");
+
+  // 🔔 update chat list in realtime (USER-SPECIFIC)
+  const chatMembers = await GroupMembers.findAll({
+    where: {
+      chatId,
+      leftAt: null,
+    },
+  });
+
+  chatMembers.forEach((member) => {
+    getIO()
+      .to(`user-${member.userId}`)
+      .emit("chat-list:update", {
+        chatId,
+        senderId: msg.senderId,
+        lastMessage: {
+          text:
+            msg.type === "text"
+              ? msg.content
+              : msg.type === "image"
+                ? "📷 Photo"
+                : msg.type === "file"
+                  ? "📎 File"
+                  : msg.content,
+          createdAt: msg.createdAt,
+          type: msg.type,
+        },
+      });
+  });
 
   // notification hook
   await notifyOnNewMessage(chatId, userId, content);
@@ -85,9 +142,17 @@ const deleteMessageForEveryone = async (messageId, userId) => {
     throw new Error("Not allowed");
   }
 
+  if (msg.fileUrl) {
+    deleteFileIfExists(msg.fileUrl);
+  }
+
   await msg.update({
     content: "This message was deleted",
     type: "system",
+    fileUrl: null,
+    fileName: null,
+    fileSize: null,
+    mimeType: null,
   });
 };
 
@@ -110,16 +175,108 @@ const readMessage = async (messageId, userId) => {
 const sendFileMessage = async (chatId, userId, file) => {
   await isMember(chatId, userId);
 
-  return Messages.create({
+  const receiverId = await getprivateChat(chatId, userId);
+
+  if (receiverId) {
+    const isBlocked = await BlockedUser.findOne({
+      where: {
+        [Op.or]: [
+          { blockerId: userId, blockedId: receiverId },
+          { blockerId: receiverId, blockedId: userId },
+        ],
+      },
+    });
+    if (isBlocked) throw new Error("You cannot send message to this user");
+  }
+
+  // decide type
+  let type = "file";
+  if (file.mimetype.startsWith("image/")) type = "image";
+  else if (file.mimetype.startsWith("video/")) type = "file";
+
+  const msg = await Messages.create({
     chatId,
     senderId: userId,
-    type: "file",
-    fileUrl: file.path,
+    type,
+    content: null,
+    fileUrl: file.path.replace(/\\/g, "/"),
     fileName: file.originalname,
     fileSize: file.size,
     mimeType: file.mimetype,
-  }).then((msg) => {
-    return msg;
+  });
+
+  console.log(msg, "msggggg");
+
+  // message status (delivered/sent)
+  const members = await GroupMembers.findAll({
+    where: {
+      chatId,
+      leftAt: null,
+      userId: { [Op.ne]: userId },
+    },
+  });
+
+  await MessageStatus.bulkCreate(
+    members.map((m) => ({
+      messageId: msg.id,
+      userId: m.userId,
+      status: isUserOnline(m.userId) ? "delivered" : "sent",
+    })),
+  );
+
+  await Chats.update({ updatedAt: new Date() }, { where: { id: chatId } });
+
+  // realtime
+  getIO().to(`chat-${chatId}`).emit("new-message", msg);
+
+  // 🔔 update chat list in realtime (USER-SPECIFIC)
+  const chatMembers = await GroupMembers.findAll({
+    where: {
+      chatId,
+      leftAt: null,
+    },
+  });
+
+  chatMembers.forEach((member) => {
+    getIO()
+      .to(`user-${member.userId}`)
+      .emit("chat-list:update", {
+        chatId,
+        senderId: msg.senderId,
+        lastMessage: {
+          text:
+            msg.type === "text"
+              ? msg.content
+              : msg.type === "image"
+                ? "📷 Photo"
+                : msg.type === "file"
+                  ? "📎 File"
+                  : msg.content,
+          createdAt: msg.createdAt,
+          type: msg.type,
+        },
+      });
+  });
+
+  // notification (send filename instead of content)
+  await notifyOnNewMessage(chatId, userId, file.originalname || "media");
+
+  return msg;
+};
+
+const searchMessages = async (chatId, userId, search) => {
+  await isMember(chatId, userId);
+
+  return Messages.findAll({
+    where: {
+      chatId,
+      type: "text",
+      content: {
+        [Op.iLike]: `%${search}%`,
+      },
+    },
+    order: [["createdAt", "DESC"]],
+    limit: 50,
   });
 };
 
@@ -131,4 +288,5 @@ module.exports = {
   deleteMessageForMe,
   readMessage,
   sendFileMessage,
+  searchMessages,
 };

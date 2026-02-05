@@ -15,7 +15,13 @@ const getMyProfile = async (req, res, next) => {
 
 const updateProfile = async (req, res, next) => {
   try {
-    const user = await userService.updateProfile(req.user.id, req.body);
+    const data = {
+      ...req.body,
+      profile_img: req.file
+        ? `/uploads/images/${req.file.filename}`
+        : undefined,
+    };
+    const user = await userService.updateProfile(req.user.id, data);
     res.status(200).json({
       user,
       message: "Profile updated successfully",
@@ -72,6 +78,65 @@ const getUserPresence = async (req, res, next) => {
   }
 };
 
+const searchUsers = async (req, res, next) => {
+  try {
+    const users = await userService.searchUsers(req.query.search, req.user.id);
+    res.json(users);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const blockUser = async (req, res, next) => {
+  try {
+    await userService.blockUser(req.user.id, req.params.userId);
+    res.json({ message: "User blocked successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const unblockUser = async (req, res, next) => {
+  try {
+    await userService.unblockUser(req.user.id, req.params.userId);
+    res.json({ message: "User unblocked successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const blockedUsers = async (req, res, next) => {
+  try {
+    const users = await userService.blockedUsers(req.user.id);
+    res.status(200).json(users);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const registerDevice = async (req, res, next) => {
+  console.log("REGISTER DEVICE HIT");
+  console.log("req.user:", req.user);
+  console.log("req.body:", req.body);
+
+  try {
+    const { deviceType, pushToken } = req.body;
+
+    if (!pushToken) {
+      return res.status(400).json({ message: "pushToken required" });
+    }
+
+    await userService.registerDevice(req.user.id, deviceType, pushToken);
+
+    res.status(201).json({
+      success: true,
+      message: "Device registered successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getMyProfile,
   updateProfile,
@@ -80,4 +145,9 @@ module.exports = {
   getOnlineUsers,
   updateStatus,
   getUserPresence,
+  searchUsers,
+  blockUser,
+  unblockUser,
+  blockedUsers,
+  registerDevice,
 };

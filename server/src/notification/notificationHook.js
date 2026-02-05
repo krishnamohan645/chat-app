@@ -7,6 +7,9 @@ const {
 } = require("../models");
 const { getIO } = require("../socket/socket");
 
+const { isUserOnline } = require("../socket/socket");
+const { sendPushToUser } = require("../services/push.service");
+
 const notifyOnNewMessage = async (chatId, senderId, content) => {
   const members = await GroupMembers.findAll({
     where: { chatId, leftAt: null },
@@ -30,16 +33,16 @@ const notifyOnNewMessage = async (chatId, senderId, content) => {
     ],
   });
 
-  console.log(
-    "Notify check:",
-    members.map((m) => ({
-      userId: m.userId,
-      isMuted: m.isMuted,
-      hasSettings: !!m.user?.user_setting,
-      push: m.user?.user_setting?.pushNotifications,
-    })),
-  );
-  console.log(members[0]?.user, "userrrr");
+  // console.log(
+  //   "Notify check:",
+  //   members.map((m) => ({
+  //     userId: m.userId,
+  //     isMuted: m.isMuted,
+  //     hasSettings: !!m.user?.user_setting,
+  //     push: m.user?.user_setting?.pushNotifications,
+  //   })),
+  // );
+  // console.log(members[0]?.user, "userrrr");
 
   for (const member of members) {
     // skip sender
@@ -68,9 +71,17 @@ const notifyOnNewMessage = async (chatId, senderId, content) => {
     });
 
     getIO().to(`user-${member.userId}`).emit("notification", notification);
+    await sendPushToUser(member.userId, {
+      title: notification.title,
+      body: notification.body,
+      data: {
+        type: "message",
+        chatId: String(chatId),
+        senderId: String(senderId),
+      },
+    });
   }
 };
-
 
 const notifyGroupEvent = async ({
   chatId,
@@ -105,6 +116,17 @@ const notifyGroupEvent = async ({
     });
 
     getIO().to(`user-${member.userId}`).emit("notification", notification);
+    
+    if (!isUserOnline(member.userId)) {
+      await sendPushToUser(member.userId, {
+        title,
+        body,
+        data: {
+          type,
+          chatId: String(chatId),
+        },
+      });
+    }
   }
 };
 

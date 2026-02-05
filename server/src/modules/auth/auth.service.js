@@ -16,52 +16,80 @@ const hashToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
 const registerUser = async ({ username, identifier, password, profileImg }) => {
+  identifier = identifier.trim().toLowerCase();
   const isEmail = identifier.includes("@");
 
   const where = isEmail ? { email: identifier } : { mobile: identifier };
 
   const existingUser = await Users.findOne({ where });
   if (existingUser) {
+    if (!existingUser.isVerified) {
+      throw new Error("OTP already sent. Please verify");
+    }
     throw new Error("User already exists");
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const user = await Users.create({
-    username,
-    email: isEmail ? identifier : null,
-    mobile: !isEmail ? identifier : null,
-    password: hashedPassword,
-    loginType: isEmail ? "email" : "mobile",
-    isVerified: false,
-    isActive: true,
-    profile_img: profileImg,
-  });
+  // OTP prepare (outside transaction logic-wise, but values ready)
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const otpHash = await bcrypt.hash(otp, 10);
 
-  // 👇 CREATE DEFAULT USER SETTINGS
-  await UserSettings.create({
-    userId: user.id,
-    pushNotifications: true,
-    emailNotifications: true,
-  });
+  const t = await sequelize.transaction();
+  try {
+    // 1️⃣ Create user
+    const user = await Users.create(
+      {
+        username,
+        email: isEmail ? identifier : null,
+        mobile: !isEmail ? identifier : null,
+        password: hashedPassword,
+        loginType: isEmail ? "email" : "mobile",
+        isVerified: false,
+        isActive: true,
+        profile_img: profileImg,
+      },
+      { transaction: t },
+    );
 
-  //   OTP GENRATION
-  const Otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const otpHash = await bcrypt.hash(Otp, 10);
+    // 2️⃣ Create default user settings
+    await UserSettings.create(
+      {
+        userId: user.id,
+      },
+      { transaction: t },
+    );
 
-  const otpRow  = await Otps.create({
-    userId: user.id,
-    identifier,
-    otpHash,
-    purpose: "signup",
-    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-  });
-  console.log("OTP CREATED:", {
-    otp: Otp,
-    identifier,
-    otpRowId: otpRow.id,
-  });
-  await sendOtp({ identifier, otp: Otp });
+    // 3️⃣ Create OTP
+    const otpRow = await Otps.create(
+      {
+        userId: user.id,
+        identifier,
+        otpHash,
+        purpose: "signup",
+        isUsed: false,
+        attempts: 0,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      },
+      { transaction: t },
+    );
+
+    await t.commit();
+
+    // 4️⃣ Send OTP (OUTSIDE transaction)
+    console.log("OTP CREATED:", {
+      otp,
+      identifier,
+      otpRowId: otpRow.id,
+    });
+
+    await sendOtp({ identifier, otp });
+
+    return { message: "OTP sent successfully" };
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
 };
 
 const VerifyOtp = async ({ identifier, otp }) => {
@@ -131,6 +159,14 @@ const VerifyOtp = async ({ identifier, otp }) => {
 
     // verify user
     await user.update({ isVerified: true }, { transaction: t });
+    await user.update(
+      {
+        isVerified: true,
+        isOnline: true,
+        lastSeen: null,
+      },
+      { transaction: t },
+    );
 
     // store refresh token
     await RefreshTokens.create(
@@ -250,6 +286,16 @@ const loginUser = async ({ identifier, password }) => {
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
   console.log("Token created in DB with ID:", createdToken.id);
+  await Users.update(
+    {
+      isOnline: true,
+      lastSeen: null,
+    },
+    {
+      where: { id: user.id },
+    },
+  );
+
   return { accessToken, refreshToken, user };
 };
 
@@ -267,37 +313,45 @@ const refreshUser = async (refreshToken) => {
   if (!refreshToken) {
     throw new Error("Refresh Token Missing");
   }
+
   const tokenHash = hashToken(refreshToken);
+
   const storedToken = await RefreshTokens.findOne({
-    where: {
-      tokenHash: tokenHash,
-    },
+    where: { tokenHash },
   });
+
   if (!storedToken) {
     throw new Error("Invalid Refresh Token");
   }
+
+  if (storedToken.expiresAt < new Date()) {
+    await RefreshTokens.destroy({ where: { tokenHash } });
+    throw new Error("Refresh token expired");
+  }
+
   let payload;
   try {
-    console.log("JWT_REFRESH_SECRET:", process.env.JWT_REFRESH_SECRET);
-    console.log("Refresh token:", refreshToken);
-
     payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
   } catch (err) {
-    await RefreshTokens.destroy({
-      where: {
-        tokenHash,
-      },
-    });
-    throw new Error("Refresh token Expired");
+    await RefreshTokens.destroy({ where: { tokenHash } });
+    throw new Error("Refresh token expired");
   }
-  const user = await Users.findByPk(payload.id);
 
+  const user = await Users.findByPk(payload.id);
   if (!user) {
     throw new Error("User not found");
   }
 
-  const newAccessToken = generateAccessToken(user);
-  return newAccessToken;
+  // ✅ MARK USER ONLINE HERE
+  await Users.update(
+    {
+      isOnline: true,
+      lastSeen: null,
+    },
+    { where: { id: user.id } },
+  );
+
+  return generateAccessToken(user);
 };
 
 const forgotPassword = async ({ identifier }) => {
@@ -394,6 +448,13 @@ const resetPassword = async ({ identifier, otp, newPassword }) => {
         lastPasswordChangeAt: new Date(),
       },
       { transaction: t },
+    );
+    await Users.update(
+      {
+        isOnline: false,
+        lastSeen: new Date(),
+      },
+      { where: { id: user.id }, transaction: t },
     );
 
     otpRecord.isUsed = true;

@@ -121,6 +121,25 @@ const unMuteChat = async (req, res, next) => {
   }
 };
 
+const searchChats = async (req, res, next) => {
+  try {
+    const chats = await chatService.searchChats(req.user.id, req.query.search);
+    res.status(200).json(chats);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getChatList = async (req, res, next) => {
+  try {
+    const chats = await chatService.getChatList(req.user.id);
+    res.json({ chats });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 module.exports = {
   createPrivateChat,
   createGroupChat,
@@ -131,4 +150,6 @@ module.exports = {
   leaveGroup,
   muteChat,
   unMuteChat,
+  searchChats,
+  getChatList
 };

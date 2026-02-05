@@ -10,6 +10,8 @@ const RefreshTokens = require("./refreshTokens.model");
 const UserSettings = require("./userSettings.model");
 const UserBlocks = require("./userBlocks.model");
 const Notification = require("./notifications.model");
+const BlockedUser = require("./blockedUsers.model");
+const Call = require("./call.model");
 
 // Run associations ONCE
 require("../init_models/associations")({
@@ -24,6 +26,8 @@ require("../init_models/associations")({
   UserSettings,
   UserBlocks,
   Notification,
+  BlockedUser,
+  Call,
 });
 
 // Export models
@@ -39,4 +43,6 @@ module.exports = {
   UserSettings,
   UserBlocks,
   Notification,
+  BlockedUser,
+  Call
 };

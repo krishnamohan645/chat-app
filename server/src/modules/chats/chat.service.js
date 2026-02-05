@@ -1,6 +1,14 @@
-const { Op, literal } = require("sequelize");
-const { Chats, GroupMembers, Users } = require("../../models");
+const { Op, literal, fn, col } = require("sequelize");
+const {
+  Chats,
+  GroupMembers,
+  Users,
+  BlockedUser,
+  Messages,
+  MessageStatus,
+} = require("../../models");
 const { notifyGroupEvent } = require("../../notification/notificationHook");
+const { isUserOnline } = require("../../socket/socket");
 
 // Helpers
 const findExistingPrivateChat = async (userA, userB) => {
@@ -49,14 +57,13 @@ const isAdmin = async (chatId, userId) => {
   }
 };
 
-const ensureGroupChat = async (chatId, userId,members=[]) => {
+const ensureGroupChat = async (chatId, userId, members = []) => {
   const chat = await Chats.findByPk(chatId, { attributes: ["type"] });
-  if(!chat || chat.type !== "group") {
+  if (!chat || chat.type !== "group") {
     throw new Error("operation allowed only in group chats");
   }
   return chat;
-}
-
+};
 
 // Services
 const createPrivateChat = async (myId, otherUserId) => {
@@ -66,6 +73,19 @@ const createPrivateChat = async (myId, otherUserId) => {
 
   if (myId === otherUserId) {
     throw new Error("Cannot create private chat with yourself");
+  }
+
+  const isBlocked = await BlockedUser.findOne({
+    where: {
+      [Op.or]: [
+        { blockerId: myId, blockedId: otherUserId },
+        { blockerId: otherUserId, blockedId: myId },
+      ],
+    },
+  });
+
+  if (isBlocked) {
+    throw new Error("You are blocked by the other user");
   }
 
   const existingChat = await findExistingPrivateChat(myId, otherUserId);
@@ -403,6 +423,159 @@ const muteChat = async (chatId, userId, mute) => {
   );
 };
 
+const searchChats = async (userId, search) => {
+  return Chats.findAll({
+    include: [
+      {
+        model: GroupMembers,
+        where: {
+          userId,
+          leftAt: null,
+        },
+        attributes: [],
+      },
+      {
+        model: Users,
+        attributes: ["id", "username", "profile_img"],
+        through: { attributes: [] },
+        where: {
+          id: { [Op.ne]: userId },
+        },
+        required: false,
+      },
+    ],
+
+    where: {
+      [Op.or]: [
+        // ✅ GROUP chats → match group name only
+        {
+          type: "group",
+          name: {
+            [Op.iLike]: `%${search}%`,
+          },
+        },
+
+        // ✅ PRIVATE chats → match other user's name only
+        {
+          type: "private",
+          "$users.username$": {
+            [Op.iLike]: `%${search}%`,
+          },
+        },
+      ],
+    },
+
+    order: [["updatedAt", "DESC"]],
+    distinct: true,
+  });
+};
+
+const getChatList = async (userId) => {
+  // 1️⃣ get chats where user is member
+  const chats = await Chats.findAll({
+    include: [
+      {
+        model: GroupMembers,
+        where: { userId, leftAt: null },
+        attributes: [],
+      },
+    ],
+    order: [["updatedAt", "DESC"]],
+  });
+
+  const results = [];
+
+  for (const chat of chats) {
+    // 2️⃣ last message
+    const lastMessage = await Messages.findOne({
+      where: { chatId: chat.id },
+      order: [["createdAt", "DESC"]],
+    });
+
+    // 3️⃣ unread count
+    const unreadCount = await MessageStatus.count({
+      where: {
+        userId,
+        isDeleted: false,
+        status: { [Op.ne]: "read" },
+      },
+      include: [
+        {
+          model: Messages,
+          where: { chatId: chat.id },
+          attributes: [],
+        },
+      ],
+    });
+
+    let name = null;
+    let avatar = null;
+    let isOnline = null;
+    let memberCount = null;
+
+    if (chat.type === "private") {
+      // find other user
+      const otherMember = await GroupMembers.findOne({
+        where: {
+          chatId: chat.id,
+          userId: { [Op.ne]: userId },
+          leftAt: null,
+        },
+      });
+
+      const otherUser = await Users.findByPk(otherMember.userId);
+
+      name = otherUser.username;
+      avatar = otherUser.profile_img;
+      isOnline = otherUser.isOnline;
+    } else {
+      // group chat
+      name = chat.name;
+
+      memberCount = await GroupMembers.count({
+        where: { chatId: chat.id, leftAt: null },
+      });
+    }
+
+    let previewText = null;
+
+    if (lastMessage) {
+      if (lastMessage.type === "text") {
+        previewText = lastMessage.content;
+      } else if (lastMessage.type === "image") {
+        previewText = "📷 Photo";
+      } else if (lastMessage.type === "file") {
+        previewText = "📎 File";
+      } else if (lastMessage.type === "system") {
+        previewText = lastMessage.content;
+      }
+    }
+
+    results.push({
+      chatId: chat.id,
+      type: chat.type,
+      name,
+      profile_img: avatar,
+      lastMessage: lastMessage
+        ? {
+            id: lastMessage.id,
+            text: previewText,
+            type: lastMessage.type,
+            senderId: lastMessage.senderId,
+            createdAt: lastMessage.createdAt,
+          }
+        : null,
+
+      lastMessageAt: lastMessage?.createdAt || null,
+      unreadCount,
+      isOnline,
+      memberCount,
+    });
+  }
+
+  return results;
+};
+
 module.exports = {
   createPrivateChat,
   createGroupChat,
@@ -414,4 +587,6 @@ module.exports = {
   muteChat,
   isMember,
   isAdmin,
+  searchChats,
+  getChatList,
 };

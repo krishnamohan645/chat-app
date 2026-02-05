@@ -1,10 +1,13 @@
+const { Users } = require("../../models");
 const authService = require("./auth.service");
 
 const registerController = async (req, res, next) => {
   try {
     await authService.registerUser({
       ...req.body,
-      profileImg: req.file ? req.file.path : null,
+      profileImg: req.file
+        ? `/uploads/images/${req.file.filename}` // ✅ RELATIVE PATH
+        : null,
     });
     res.status(201).json({
       message: "Signup Successful. please verify OTP",
@@ -21,10 +24,12 @@ const verifyOtpController = async (req, res, next) => {
   try {
     const { accessToken, refreshToken } = await authService.VerifyOtp(req.body);
 
+    const isProduction = process.env.NODE_ENV === "production";
+
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      sameSite: "strict",
-      secure: true,
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
     });
 
     res.status(200).json({
@@ -88,17 +93,23 @@ const logoutController = async (req, res, next) => {
     if (refreshToken) {
       await authService.logoutUser(refreshToken);
     }
-    const isProduction = process.env.NODE_ENV === "production";
+
+    await Users.update(
+      {
+        isOnline: false,
+        lastSeen: new Date(),
+      },
+      { where: { id: req.user.id } },
+    );
+
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      sameSite: isProduction ? "strict" : "lax",
+      sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
     });
 
-    return res.status(200).json({
-      message: "Logout Successfully",
-    });
+    res.status(200).json({ message: "Logout Successfully" });
   } catch (err) {
     next(err);
   }
@@ -128,8 +139,8 @@ const forgotPasswordController = async (req, res) => {
 };
 
 const resetPasswordController = async (req, res) => {
-  const { identifier, otp, newPassword  } = req.body;
-  await authService.resetPassword({ identifier, otp, newPassword  });
+  const { identifier, otp, newPassword } = req.body;
+  await authService.resetPassword({ identifier, otp, newPassword });
 
   res.status(200).json({
     message: "Password reset successfully",
