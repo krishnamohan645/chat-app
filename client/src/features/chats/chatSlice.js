@@ -27,9 +27,12 @@ export const getMyChats = createAsyncThunk(
 
 export const getChatList = createAsyncThunk(
   "chat/getChatList",
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
+    const token = getState().auth.token;
+    if (!token) return rejectWithValue("NO_TOKEN");
     try {
       const res = await getChatListAPI();
+      console.log(res.data.chats, "chats in redux chat list");
       return res.data.chats;
     } catch (err) {
       return rejectWithValue(err.response.data.message);
@@ -57,29 +60,37 @@ const chatSlice = createSlice({
     setMyUserId: (state, action) => {
       state.myUserId = action.payload;
     },
+
     updateLastMessage: (state, action) => {
       const { chatId, message } = action.payload;
+      const chatIdNum = Number(chatId);
 
-      const chat = state.chats.find((c) => c.chatId === chatId);
+      const chat = state.chats.find((c) => c.chatId === chatIdNum);
       if (!chat) return;
 
       chat.lastMessage = message;
       chat.lastMessageAt = message.createdAt;
 
-      // move chat to top
-      state.chats = [chat, ...state.chats.filter((c) => c.chatId !== chatId)];
+      state.chats = [
+        chat,
+        ...state.chats.filter((c) => c.chatId !== chatIdNum),
+      ];
+      console.log(
+        "UPDATE_LAST_MESSAGE",
+        action.payload.chatId,
+        state.chats.map((c) => c.chatId),
+      );
     },
 
     incrementUnread: (state, action) => {
       const { chatId, senderId } = action.payload;
+      const chatIdNum = Number(chatId);
 
-      const chat = state.chats.find((c) => c.chatId === chatId);
-      if (!chatId) return;
+      const chat = state.chats.find((c) => c.chatId === chatIdNum);
+      if (!chat) return;
 
-      // dont increment for my own message,
       if (senderId === state.myUserId) return;
-
-      if (state.activeChat?.chatId === chatId) return;
+      if (state.activeChat?.chatId === chatIdNum) return;
 
       chat.unreadCount = (chat.unreadCount || 0) + 1;
     },
@@ -122,14 +133,17 @@ const chatSlice = createSlice({
     builder
       .addCase(getChatList.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(getChatList.fulfilled, (state, action) => {
         state.loading = false;
-        state.chats = action.payload;
+        state.chats = action.payload; // This will be the array from res.data.chats
+        console.log("✅ Chats loaded:", state.chats.length);
       })
       .addCase(getChatList.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        console.error("❌ Failed to load chats:", action.payload);
       });
   },
 });

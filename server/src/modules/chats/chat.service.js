@@ -471,7 +471,6 @@ const searchChats = async (userId, search) => {
 };
 
 const getChatList = async (userId) => {
-  // 1️⃣ get chats where user is member
   const chats = await Chats.findAll({
     include: [
       {
@@ -486,23 +485,24 @@ const getChatList = async (userId) => {
   const results = [];
 
   for (const chat of chats) {
-    // 2️⃣ last message
     const lastMessage = await Messages.findOne({
       where: { chatId: chat.id },
       order: [["createdAt", "DESC"]],
     });
 
-    // 3️⃣ unread count
     const unreadCount = await MessageStatus.count({
       where: {
         userId,
-        isDeleted: false,
         status: { [Op.ne]: "read" },
       },
       include: [
         {
           model: Messages,
-          where: { chatId: chat.id },
+          required: true,
+          where: {
+            chatId: chat.id,
+            senderId: { [Op.ne]: userId },
+          },
           attributes: [],
         },
       ],
@@ -511,10 +511,11 @@ const getChatList = async (userId) => {
     let name = null;
     let avatar = null;
     let isOnline = null;
+    let lastSeen = null;
     let memberCount = null;
+    let otherUserId = null;
 
     if (chat.type === "private") {
-      // find other user
       const otherMember = await GroupMembers.findOne({
         where: {
           chatId: chat.id,
@@ -523,39 +524,50 @@ const getChatList = async (userId) => {
         },
       });
 
-      const otherUser = await Users.findByPk(otherMember.userId);
+      if (!otherMember) continue;
 
+      const otherUser = await Users.findByPk(otherMember.userId, {
+        attributes: ["id", "username", "profile_img", "isOnline", "lastSeen"],
+      });
+
+      otherUserId = otherUser.id;
       name = otherUser.username;
       avatar = otherUser.profile_img;
       isOnline = otherUser.isOnline;
+      lastSeen = otherUser.isOnline ? null : otherUser.lastSeen;
     } else {
       // group chat
       name = chat.name;
-
       memberCount = await GroupMembers.count({
         where: { chatId: chat.id, leftAt: null },
       });
     }
 
     let previewText = null;
-
     if (lastMessage) {
-      if (lastMessage.type === "text") {
-        previewText = lastMessage.content;
-      } else if (lastMessage.type === "image") {
-        previewText = "📷 Photo";
-      } else if (lastMessage.type === "file") {
-        previewText = "📎 File";
-      } else if (lastMessage.type === "system") {
-        previewText = lastMessage.content;
-      }
+      previewText =
+        lastMessage.type === "text"
+          ? lastMessage.content
+          : lastMessage.type === "image"
+            ? "📷 Photo"
+            : lastMessage.type === "file"
+              ? "📎 File"
+              : lastMessage.content;
     }
 
     results.push({
       chatId: chat.id,
       type: chat.type,
+
+      // 🔑 THIS FIXES VIEW PROFILE BUG
+      otherUserId, // null for group chats
+
       name,
       profile_img: avatar,
+      isOnline,
+      lastSeen,
+      memberCount,
+
       lastMessage: lastMessage
         ? {
             id: lastMessage.id,
@@ -568,8 +580,6 @@ const getChatList = async (userId) => {
 
       lastMessageAt: lastMessage?.createdAt || null,
       unreadCount,
-      isOnline,
-      memberCount,
     });
   }
 

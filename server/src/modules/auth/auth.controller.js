@@ -55,10 +55,13 @@ const resendOtpController = async (req, res, next) => {
 const loginUserController = async (req, res, next) => {
   try {
     const { identifier, password } = req.body;
+
     const { accessToken, refreshToken, user } = await authService.loginUser({
       identifier,
       password,
     });
+    // console.log("LOGIN BODY:", req.body);
+    // console.log("LOGIN SUCCESS USER:", user.id);
 
     const isProduction = process.env.NODE_ENV === "production";
     res.cookie("refreshToken", refreshToken, {
@@ -69,9 +72,23 @@ const loginUserController = async (req, res, next) => {
       path: "/", // ✅ IMPORTANT
     });
 
+    // res.status(200).json({
+    //   message: "Login Successful",
+    //   accessToken,
+    //   user: {
+    //     id: user.id,
+    //     username: user.username,
+    //     email: user.email,
+    //     mobile: user.mobile,
+    //     profile_img: user.profile_img,
+    //     loginType: user.loginType,
+    //   },
+    // });
     res.status(200).json({
       message: "Login Successful",
       accessToken,
+      refreshToken:
+        process.env.NODE_ENV !== "production" ? refreshToken : undefined,
       user: {
         id: user.id,
         username: user.username,
@@ -119,7 +136,9 @@ const refreshController = async (req, res, next) => {
   try {
     const refreshToken = req.cookies.refreshToken;
     const newAccessToken = await authService.refreshUser(refreshToken);
-
+    if (!newAccessToken) {
+      return res.status(401).json({ message: "No refresh token" });
+    }
     return res.status(200).json({
       message: "Refresh Successful",
       accessToken: newAccessToken,

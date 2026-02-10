@@ -1,19 +1,33 @@
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { Mail, Phone, Clock, Edit } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
-import { getMyProfile } from "../features/user/userSlice";
+import { getMyProfile, getUserProfile } from "../features/user/userSlice";
 import { useEffect } from "react";
 import { API_BASE_URL } from "../config/constants";
 
 const Profile = () => {
+  const { userId } = useParams(); // optional
   const dispatch = useDispatch();
-  const { loading, user } = useSelector((state) => state.user);
 
+  const { user, selectedUser, loading } = useSelector((state) => state.user);
+  const { token } = useSelector((state) => state.auth);
+
+  const isMyProfile = !userId;
+  const profileData = isMyProfile ? user : selectedUser;
+
+  /* ---------------- FETCH PROFILE ---------------- */
   useEffect(() => {
-    dispatch(getMyProfile());
-  }, [dispatch]);
+    if (!token) return;
 
-  if (loading || !user) {
+    if (userId) {
+      dispatch(getUserProfile(userId)); // other user
+    } else {
+      dispatch(getMyProfile()); // my profile
+    }
+  }, [dispatch, token, userId]);
+
+  /* ---------------- LOADING GUARD ---------------- */
+  if (loading || !profileData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -25,12 +39,12 @@ const Profile = () => {
     username,
     email,
     mobile,
-    // profile_img,
     bio,
     isOnline,
     lastSeen,
     createdAt,
-  } = user;
+    profile_img,
+  } = profileData;
 
   const joinedDate = new Date(createdAt).toLocaleDateString("en-IN", {
     month: "long",
@@ -50,14 +64,15 @@ const Profile = () => {
         <div className="flex flex-col items-center">
           <div className="relative mb-4">
             <div className="h-28 w-28 rounded-full overflow-hidden ring-4 ring-white dark:ring-gray-900 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-              {user?.profile_img ? (
+              {profile_img ? (
                 <img
-                  src={`${API_BASE_URL}${user.profile_img}`}
-                  alt={user.username}
+                  src={`${API_BASE_URL}${profile_img}`}
+                  alt={username}
+                  className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="h-28 w-28 bg-gray-300 rounded-full flex items-center justify-center">
-                  {user.username?.charAt(0).toUpperCase()}
+                <div className="h-28 w-28 bg-gray-300 rounded-full flex items-center justify-center text-3xl font-bold">
+                  {username?.charAt(0).toUpperCase()}
                 </div>
               )}
             </div>
@@ -82,12 +97,15 @@ const Profile = () => {
       <div className="px-4 -mt-8">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
           <div className="pt-6 px-6">
-            <Link to="/profile/edit">
-              <button className="w-full mb-6 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2">
-                <Edit className="h-4 w-4" />
-                Edit Profile
-              </button>
-            </Link>
+            {/* ✅ Edit only my profile */}
+            {isMyProfile && (
+              <Link to="/profile/edit">
+                <button className="w-full mb-6 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2">
+                  <Edit className="h-4 w-4" />
+                  Edit Profile
+                </button>
+              </Link>
+            )}
 
             <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
 

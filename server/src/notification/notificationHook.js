@@ -71,15 +71,17 @@ const notifyOnNewMessage = async (chatId, senderId, content) => {
     });
 
     getIO().to(`user-${member.userId}`).emit("notification", notification);
-    await sendPushToUser(member.userId, {
-      title: notification.title,
-      body: notification.body,
-      data: {
-        type: "message",
-        chatId: String(chatId),
-        senderId: String(senderId),
-      },
-    });
+    if (!isUserOnline(member.userId)) {
+      await sendPushToUser(member.userId, {
+        title: notification.title,
+        body: notification.body,
+        data: {
+          type: "message",
+          chatId: String(chatId),
+          senderId: String(senderId),
+        },
+      });
+    }
   }
 };
 
@@ -116,7 +118,7 @@ const notifyGroupEvent = async ({
     });
 
     getIO().to(`user-${member.userId}`).emit("notification", notification);
-    
+
     if (!isUserOnline(member.userId)) {
       await sendPushToUser(member.userId, {
         title,

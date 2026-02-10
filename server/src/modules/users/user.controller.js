@@ -115,9 +115,9 @@ const blockedUsers = async (req, res, next) => {
 };
 
 const registerDevice = async (req, res, next) => {
-  console.log("REGISTER DEVICE HIT");
-  console.log("req.user:", req.user);
-  console.log("req.body:", req.body);
+  // console.log("REGISTER DEVICE HIT");
+  // console.log("req.user:", req.user);
+  // console.log("req.body:", req.body);
 
   try {
     const { deviceType, pushToken } = req.body;
@@ -137,6 +137,30 @@ const registerDevice = async (req, res, next) => {
   }
 };
 
+const getUserProfile = async (req, res, next) => {
+  console.log("getUserProfile hit");
+  try {
+    const targetUserId = Number(req.params.userId);
+    const requesterId = req.user.id;
+
+    // optional: block self via this route
+    if (targetUserId === requesterId) {
+      return res.status(400).json({
+        message: "Use /users/me for your own profile",
+      });
+    }
+
+    const user = await userService.getUserProfile(targetUserId);
+    res.status(200).json({
+      user,
+      message: "User profile fetched successfully",
+    });
+  } catch (err) {
+    console.log("Error in get user controller:", err);
+    next(err);
+  }
+};
+
 module.exports = {
   getMyProfile,
   updateProfile,
@@ -150,4 +174,5 @@ module.exports = {
   unblockUser,
   blockedUsers,
   registerDevice,
+  getUserProfile,
 };

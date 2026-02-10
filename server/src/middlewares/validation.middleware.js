@@ -1,6 +1,6 @@
 const authValidation = (req, res, next) => {
-  console.log("BODY:", req.body);
-  console.log("FILE:", req.file);
+  // console.log("BODY:", req.body);
+  // console.log("FILE:", req.file);
 
   // 🔒 HARD SAFETY
   if (!req.body) {

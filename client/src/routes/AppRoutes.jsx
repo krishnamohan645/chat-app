@@ -33,12 +33,13 @@ const AppRoutes = () => {
       <Route element={<ProtectedRoute />}>
         <Route element={<MainLayout />}>
           <Route path="/chats" element={<ChatList />} />
-          <Route path="/chat/:id" element={<Chat />} />
+          <Route path="/chat/:chatId" element={<Chat />} />
           <Route path="/groups" element={<Groups />} />
           <Route path="/group/:id" element={<GroupChat />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/edit" element={<EditProfile />} />
+          <Route path="/profile/:userId" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/search" element={<UserSearch />} />
         </Route>

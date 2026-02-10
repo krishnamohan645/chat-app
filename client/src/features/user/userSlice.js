@@ -3,6 +3,7 @@ import {
   changePasswordAPI,
   getAllUsersAPI,
   getMyProfileAPI,
+  getUserProfileAPI,
   registerDeviceAPI,
   searchUsersAPI,
   updateProfileAPI,
@@ -22,14 +23,22 @@ export const registerDevice = createAsyncThunk(
 
 export const getMyProfile = createAsyncThunk(
   "user/getMyProfile",
-  async (data, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
     try {
+      const token = getState().auth.token;
+
+      // 🛑 HARD GUARD (MOST IMPORTANT)
+      if (!token) {
+        return rejectWithValue("NO_TOKEN");
+      }
+
       const res = await getMyProfileAPI();
       console.log(res.data, "res in getMyProfile redux");
+
       return res.data.user;
     } catch (err) {
       console.log(err.response?.data?.message, "error in getMyProfile redux");
-      return rejectWithValue(err.response?.data?.message);
+      return rejectWithValue(err.response?.data?.message || "PROFILE_FAILED");
     }
   },
 );
@@ -83,13 +92,28 @@ export const getAllUsers = createAsyncThunk(
   },
 );
 
+export const getUserProfile = createAsyncThunk(
+  "user/getUserProfile",
+  async (userId, { rejectWithValue }) => {
+    try {
+      const res = await getUserProfileAPI(userId);
+      console.log(res.data, "ressss in getUserProfile");
+      return res.data.user;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message);
+    }
+  },
+);
+
 const userSlice = createSlice({
   name: "user",
   initialState: {
     users: [],
+    user: null,
     loading: false,
     error: null,
     searchUsers: [],
+    selectedUser: null,
   },
   reducers: {
     clearSearch: (state) => {
@@ -166,6 +190,19 @@ const userSlice = createSlice({
       })
 
       .addCase(searchUsers.rejected, (state) => {
+        state.loading = false;
+      });
+
+    // GET USER PROFILE
+    builder
+      .addCase(getUserProfile.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(getUserProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.selectedUser = action.payload;
+      })
+      .addCase(getUserProfile.rejected, (state) => {
         state.loading = false;
       });
   },

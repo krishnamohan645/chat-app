@@ -3,17 +3,23 @@ import { Outlet } from "react-router-dom";
 import TopNav from "./TopNav";
 import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { getMyProfile } from "../../features/user/userSlice";
 
 const MainLayout = () => {
   const dispatch = useDispatch();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const { isAuthenticated, authLoading } = useSelector((state) => state.auth);
+
+  // ✅ Fetch profile once authenticated
   useEffect(() => {
-    dispatch(getMyProfile());
-  }, [dispatch]);
-  
+    if (isAuthenticated && !authLoading) {
+      console.log("👤 Fetching user profile...");
+      dispatch(getMyProfile());
+    }
+  }, [isAuthenticated, authLoading, dispatch]);
+
   return (
     <div className="min-h-screen bg-background bg-gray-900">
       <TopNav

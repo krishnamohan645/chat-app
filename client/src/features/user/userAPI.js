@@ -23,3 +23,8 @@ export const getAllUsersAPI = () => {
 export const searchUsersAPI = (query) => {
   return api.get(`/user/search?search=${query}`);
 };
+
+export const getUserProfileAPI = (userId) => {
+  console.log(userId, "userId in userAPI");
+  return api.get(`/user/user-profile/${userId}`);
+}

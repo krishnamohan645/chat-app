@@ -14,6 +14,8 @@ const sendMessage = async (req, res, next) => {
 };
 
 const getMessages = async (req, res, next) => {
+  console.log("userrrrrrr", req.user.id, "chatttttttt", req.params.chatId);
+
   try {
     const { limit = 20, offset = 0 } = req.query;
     const msgs = await messageService.getMessages(
@@ -30,11 +32,15 @@ const getMessages = async (req, res, next) => {
 
 const editMessage = async (req, res, next) => {
   try {
+    if (!req.body?.content) {
+      return res.status(400).json({ message: "Content required" });
+    }
     await messageService.editMessage(
       req.params.messageId,
       req.user.id,
       req.body.content,
     );
+
     res.json({ message: "Message Updated" });
   } catch (err) {
     next(err);
@@ -71,6 +77,15 @@ const readMessage = async (req, res, next) => {
   }
 };
 
+const readAllMessages = async (req, res, next) => {
+  try {
+    await messageService.readAllMessages(req.params.chatId, req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const sendFileMessage = async (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) {
@@ -98,8 +113,8 @@ const searchMessages = async (req, res, next) => {
     const msgs = await messageService.searchMessages(
       req.params.chatId,
       req.user.id,
-      req.query.search
-    )
+      req.query.search,
+    );
     res.json(msgs);
   } catch (err) {
     next(err);
@@ -114,5 +129,6 @@ module.exports = {
   deleteMessageForMe,
   readMessage,
   sendFileMessage,
-  searchMessages
+  searchMessages,
+  readAllMessages,
 };

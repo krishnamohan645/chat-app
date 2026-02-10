@@ -1,14 +1,16 @@
+// src/features/auth/authSlice.js
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import {
   forgotPasswordAPI,
   loginAPI,
   logoutAPI,
+  refreshAPI,
   registerAPI,
   resendOtpAPI,
   resetPasswordAPI,
   verifyOtpAPI,
 } from "./authAPI";
-import api from "../../services/axiosInstance";
+import { setAxiosToken } from "../../services/axiosInstance";
 
 export const registerUser = createAsyncThunk(
   "auth/register",
@@ -39,10 +41,8 @@ export const resendOtp = createAsyncThunk(
   async (data, { rejectWithValue }) => {
     try {
       const res = await resendOtpAPI(data);
-      console.log(res.data, "resend otp");
       return res.data;
     } catch (error) {
-      console.log(error, "error");
       return rejectWithValue(error.response.data.message);
     }
   },
@@ -53,37 +53,30 @@ export const loginUser = createAsyncThunk(
   async (data, { rejectWithValue }) => {
     try {
       const res = await loginAPI(data);
-      localStorage.setItem("token", res.data.accessToken);
-      console.log(res.data, "login response");
-      return res.data;
-    } catch (error) {
-      console.error("error", error);
-      return rejectWithValue(error.response.data.message);
+      return {
+        token: res.data.accessToken,
+        user: res.data.user,
+      };
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message);
     }
   },
 );
 
-export const logoutUser = createAsyncThunk(
-  "auth/logout",
-  async (_, { rejectWithValue }) => {
-    try {
-      const res = await logoutAPI();
-      localStorage.removeItem("token");
-      return res.data;
-    } catch (error) {
-      return rejectWithValue(error.response.data.message);
-    }
-  },
-);
+export const logoutUser = createAsyncThunk("auth/logout", async () => {
+  await logoutAPI();
+  return true;
+});
 
 export const initAuth = createAsyncThunk(
   "auth/init",
   async (_, { rejectWithValue }) => {
     try {
-      const res = await api.post("/auth/refresh");
-      localStorage.setItem("token", res.data.accessToken);
+      const res = await refreshAPI();
+      console.log("✅ Refresh API succeeded:", res.data);
       return res.data.accessToken;
-    } catch {
+    } catch (error) {
+      console.log("❌ Refresh API failed:", error.response?.status);
       return rejectWithValue(null);
     }
   },
@@ -124,7 +117,7 @@ const authSlice = createSlice({
     otpSent: false,
     otpVerified: false,
     error: null,
-    token: localStorage.getItem("token"),
+    token: null,
     forgotPasswordLoading: false,
     resetPasswordLoading: false,
     passwordResetSuccess: false,
@@ -139,9 +132,16 @@ const authSlice = createSlice({
     },
     logoutLocal: (state) => {
       state.user = null;
-      state.token = false;
+      state.token = null;
       state.isAuthenticated = false;
-      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      setAxiosToken(null);
+    },
+    // ✅ Used by axios interceptor for token refresh
+    setAccessToken: (state, action) => {
+      state.token = action.payload;
+      state.isAuthenticated = true;
+      setAxiosToken(action.payload);
     },
   },
   extraReducers: (builder) => {
@@ -161,7 +161,7 @@ const authSlice = createSlice({
         state.error = action.payload;
       });
 
-    //   VERIFY OTP
+    // VERIFY OTP
     builder
       .addCase(verifyOtp.pending, (state) => {
         state.loading = true;
@@ -169,12 +169,16 @@ const authSlice = createSlice({
       })
       .addCase(verifyOtp.fulfilled, (state, action) => {
         state.loading = false;
-        // state.otpVerified = true;
         state.isAuthenticated = true;
         state.user = action.payload.user;
+        state.token = action.payload.accessToken;
 
-        // 👇 ADD THIS
-        localStorage.setItem("token", action.payload.accessToken);
+        // ✅ Set axios token
+        setAxiosToken(action.payload.accessToken);
+
+        // Store user in localStorage
+        localStorage.setItem("user", JSON.stringify(action.payload.user));
+        console.log("✅ OTP verified, token set");
       })
       .addCase(verifyOtp.rejected, (state, action) => {
         state.loading = false;
@@ -182,7 +186,7 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
       });
 
-    //   RESEND OTP
+    // RESEND OTP
     builder
       .addCase(resendOtp.pending, (state) => {
         state.loading = true;
@@ -206,6 +210,11 @@ const authSlice = createSlice({
         state.loading = false;
         state.isAuthenticated = true;
         state.user = action.payload.user;
+        state.token = action.payload.token;
+
+        // ✅ Set axios token
+        setAxiosToken(action.payload.token);
+        console.log("✅ Login succeeded, token set");
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -214,11 +223,17 @@ const authSlice = createSlice({
 
     // LOGOUT
     builder.addCase(logoutUser.fulfilled, (state) => {
-      state.isAuthenticated = false;
       state.user = null;
+      state.isAuthenticated = false;
+      state.token = null;
+
+      // ✅ Clear axios token
+      setAxiosToken(null);
+      localStorage.removeItem("user");
+      console.log("✅ Logged out, token cleared");
     });
 
-    // REFRESH TOKEN (INITAUTH)
+    // ✅ INIT AUTH (REFRESH TOKEN)
     builder
       .addCase(initAuth.pending, (state) => {
         state.authLoading = true;
@@ -227,10 +242,19 @@ const authSlice = createSlice({
         state.token = action.payload;
         state.isAuthenticated = true;
         state.authLoading = false;
+
+        // ✅ CRITICAL FIX - Set axios token immediately
+        setAxiosToken(action.payload);
+        console.log("✅ Auth initialized, token set in Axios");
       })
       .addCase(initAuth.rejected, (state) => {
-        state.authLoading = false;
+        state.token = null;
         state.isAuthenticated = false;
+        state.authLoading = false;
+
+        // ✅ Clear axios token
+        setAxiosToken(null);
+        console.log("❌ Auth initialization failed");
       });
 
     // FORGOT PASSWORD
@@ -264,5 +288,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { resetAuthState, logoutLocal } = authSlice.actions;
+export const { reset, logoutLocal, setAccessToken } = authSlice.actions;
 export default authSlice.reducer;

@@ -31,10 +31,12 @@ const EditProfile = () => {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const { token } = useSelector((state) => state.auth);
 
   useEffect(() => {
+    if (!token) return;
     dispatch(getMyProfile());
-  }, [dispatch]);
+  }, [dispatch, token]);
 
   useEffect(() => {
     if (user) {

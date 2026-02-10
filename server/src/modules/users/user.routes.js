@@ -23,5 +23,6 @@ router.post("/:userId/block", authMiddleware, userController.blockUser);
 router.delete("/:userId/block", authMiddleware, userController.unblockUser);
 router.get("/blocked", authMiddleware, userController.blockedUsers);
 router.post("/device", authMiddleware, userController.registerDevice);
+router.get("/user-profile/:userId", authMiddleware, userController.getUserProfile)
 
 module.exports = router;

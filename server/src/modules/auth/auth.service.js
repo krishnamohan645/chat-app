@@ -311,7 +311,8 @@ const logoutUser = async (refreshToken) => {
 
 const refreshUser = async (refreshToken) => {
   if (!refreshToken) {
-    throw new Error("Refresh Token Missing");
+    // throw new Error("Refresh Token Missing");
+    return null;
   }
 
   const tokenHash = hashToken(refreshToken);

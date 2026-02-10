@@ -9,6 +9,7 @@ const AuthWatcher = () => {
   const navigate = useNavigate();
   const { isAuthenticated, authLoading } = useSelector((state) => state.auth);
   const location = useLocation();
+  const { token } = useSelector((state) => state.auth);
 
   useEffect(() => {
     if (authLoading) return;
@@ -23,9 +24,14 @@ const AuthWatcher = () => {
 
     if (publicRoutes.includes(location.pathname)) return;
 
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !publicRoutes.includes(location.pathname)) {
       navigate("/login", { replace: true });
     }
+    console.log("AUTH WATCHER CHECK:", {
+      authLoading,
+      isAuthenticated,
+      path: location.pathname,
+    });
   }, [authLoading, isAuthenticated, location.pathname, navigate]);
 
   // 🔹 Register device after login
@@ -33,7 +39,7 @@ const AuthWatcher = () => {
     if (!isAuthenticated) return;
 
     const run = async () => {
-      const fcmToken = await getFcmToken();
+      const fcmToken = await getFcmToken(token);
       if (fcmToken) {
         dispatch(
           registerDevice({
@@ -44,7 +50,7 @@ const AuthWatcher = () => {
       }
     };
     run();
-  }, [isAuthenticated, dispatch]);
+  }, [isAuthenticated, dispatch,token]);
 
   if (authLoading) return null;
 

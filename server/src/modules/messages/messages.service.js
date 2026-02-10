@@ -172,6 +172,30 @@ const readMessage = async (messageId, userId) => {
   });
 };
 
+const readAllMessages = async (chatId, userId) => {
+  await MessageStatus.update(
+    { status: "read" },
+    {
+      where: {
+        userId,
+        status: { [Op.ne]: "read" },
+      },
+      include: [
+        {
+          model: Messages,
+          required: true,
+          where: { chatId },
+        },
+      ],
+    },
+  );
+
+  getIO().to(`chat-${chatId}`).emit("messages-read", {
+    chatId: chatId,
+    readerId: userId,
+  });
+};
+
 const sendFileMessage = async (chatId, userId, file) => {
   await isMember(chatId, userId);
 
@@ -289,4 +313,5 @@ module.exports = {
   readMessage,
   sendFileMessage,
   searchMessages,
+  readAllMessages,
 };

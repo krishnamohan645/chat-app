@@ -126,7 +126,15 @@ const searchUsers = async (search, currentUserId) => {
       },
       isActive: true,
     },
-    attributes: ["id", "username", "profile_img", "isOnline","bio","lastSeen","email"],
+    attributes: [
+      "id",
+      "username",
+      "profile_img",
+      "isOnline",
+      "bio",
+      "lastSeen",
+      "email",
+    ],
     limit: 20,
   });
 };
@@ -171,6 +179,14 @@ const registerDevice = async (userId, deviceType, pushToken) => {
   return device;
 };
 
+const getUserProfile = async (userId) => {
+  const user = await Users.findByPk(userId,  {
+    attributes: { exclude: ["password"] },
+  });
+  if (!user) throw new Error("User not found");
+  return user;
+};
+
 module.exports = {
   getMyProfile,
   updateProfile,
@@ -184,4 +200,5 @@ module.exports = {
   unblockUser,
   blockedUsers,
   registerDevice,
+  getUserProfile,
 };

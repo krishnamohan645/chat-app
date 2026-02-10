@@ -1,6 +1,7 @@
 const { Server } = require("socket.io");
 const { Devices, Users, MessageStatus, Messages, Call } = require("../models");
 const { sendPushToUser } = require("../services/push.service");
+const jwt = require("jsonwebtoken");
 
 let io;
 
@@ -25,12 +26,37 @@ const initSocket = (server) => {
     cors: { origin: "*" },
   });
 
+  // Add authentication middleware
+  io.use(async (socket, next) => {
+    try {
+      const token = socket.handshake.auth?.token;
+
+      if (!token) {
+        return next(new Error("Authentication error: No token provided"));
+      }
+
+      // Verify JWT token
+      const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+      // socket.userId = decoded.userId;
+      socket.userId = decoded.userId;
+      socket.user = decoded;
+
+      next();
+    } catch (error) {
+      console.error("Socket authentication failed:", error.message);
+      next(new Error("Authentication error: Invalid token"));
+    }
+  });
+
   io.on("connection", async (socket) => {
-    console.log("🔥 SOCKET CONNECTED:", socket.id);
-    console.log("🔥 AUTH DATA:", socket.handshake.auth);
+    console.log("✅ SOCKET CONNECTED");
+    console.log("socket.id:", socket.id);
+    console.log("socket.userId:", socket.userId);
+
     socket.onAny((event, data) => {
       console.log("SOCKET EVENT:", event, data);
     });
+
     // CHAT ROOMS
     socket.on("join-chat", async (chatId) => {
       socket.join(`chat-${chatId}`);
@@ -59,41 +85,56 @@ const initSocket = (server) => {
     });
 
     // USER ROOM (notifications)
-    socket.on("join-user", (userId) => {
-      console.log("👤 join-user received:", userId);
-      socket.join(`user-${userId}`);
+    socket.on("join-user", () => {
+      socket.join(`user-${socket.userId}`);
+
+      // setTimeout(() => {
+      //   const realChatId = 13; // one that exists in state
+
+      //   io.to(`user-${socket.userId}`).emit("chat-list:update", {
+      //     chatId: realChatId,
+      //     senderId: 17,
+      //     lastMessage: {
+      //       text: "REAL TEST",
+      //       createdAt: new Date(),
+      //     },
+      //   });
+      // }, 1000);
     });
 
     // HANDSHAKE AUTH (presence)
-    const userId = socket.handshake.auth?.userId;
+    // const userId = socket.handshake.auth?.userId;
 
-    if (!userId) {
-      socket.disconnect(true);
-      return;
-    }
+    // if (!userId) {
+    //   socket.disconnect(true);
+    //   return;
+    // }
 
-    socket.userId = userId;
+    // socket.userId = userId;
 
-    console.log("socket connected userId:", userId);
+    // console.log("socket connected userId:", userId);
+
+    // Use socket.userId from JWT middleware
+    console.log("socket connected userId:", socket.userId);
 
     // ONLINE LOGIC (FIXED)
-    const count = (onlineUsers.get(userId) || 0) + 1;
-    onlineUsers.set(userId, count);
+    const count = (onlineUsers.get(socket.userId) || 0) + 1;
+    onlineUsers.set(socket.userId, count);
 
     if (count === 1) {
-      await Users.update({ isOnline: true }, { where: { id: userId } });
+      await Users.update({ isOnline: true }, { where: { id: socket.userId } });
 
       await MessageStatus.update(
         { status: "delivered" },
         {
           where: {
-            userId,
+            userId: socket.userId,
             status: "sent",
           },
         },
       );
 
-      socket.broadcast.emit("user-online", userId);
+      socket.broadcast.emit("user-online", socket.userId);
     }
 
     // OPTIONAL DEVICE TRACKING
@@ -188,7 +229,7 @@ const initSocket = (server) => {
             title: "Missed Call",
             body: "You missed a call",
             data: {
-              callId: String(call.Id),
+              callId: String(call.id),
               type: "missed_call",
             },
           });
@@ -374,6 +415,7 @@ const initSocket = (server) => {
     // DISCONNECT (FIXED)
     socket.on("disconnect", async () => {
       console.log("User Disconnected:", socket.id);
+      console.log("socket disconnected", socket.userId);
 
       for (const [callId, callInfo] of Array.from(activeCalls.entries())) {
         if (
@@ -408,17 +450,17 @@ const initSocket = (server) => {
         }
       }
 
-      const current = (onlineUsers.get(userId) || 1) - 1;
+      const current = (onlineUsers.get(socket.userId) || 1) - 1;
 
       if (current <= 0) {
-        onlineUsers.delete(userId);
+        onlineUsers.delete(socket.userId);
 
         await Users.update(
           {
             isOnline: false,
             lastSeen: new Date(),
           },
-          { where: { id: userId } },
+          { where: { id: socket.userId } },
         );
 
         // update device last seen (if exists)
@@ -429,9 +471,9 @@ const initSocket = (server) => {
           );
         }
 
-        socket.broadcast.emit("user-offline", userId);
+        socket.broadcast.emit("user-offline", socket.userId);
       } else {
-        onlineUsers.set(userId, current);
+        onlineUsers.set(socket.userId, current);
       }
     });
   });
