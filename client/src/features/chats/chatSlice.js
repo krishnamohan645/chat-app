@@ -48,6 +48,8 @@ const chatSlice = createSlice({
     loading: false,
     error: null,
     myUserId: null,
+    openedChatId: [], // NEW: Track opened chats for read status
+    typingUsers: {}, // NEW: Track typing users per chat
   },
   reducers: {
     clearChat: (state) => {
@@ -59,6 +61,9 @@ const chatSlice = createSlice({
     },
     setMyUserId: (state, action) => {
       state.myUserId = action.payload;
+    },
+    setOpenedChatId: (state, action) => {
+      state.openedChatId = action.payload;
     },
 
     updateLastMessage: (state, action) => {
@@ -90,7 +95,7 @@ const chatSlice = createSlice({
       if (!chat) return;
 
       if (senderId === state.myUserId) return;
-      if (state.activeChat?.chatId === chatIdNum) return;
+      if (state.openedChatId === chatIdNum) return;
 
       chat.unreadCount = (chat.unreadCount || 0) + 1;
     },
@@ -99,6 +104,34 @@ const chatSlice = createSlice({
       const chat = state.chats.find((c) => c.chatId === action.payload);
       if (chat) {
         chat.unreadCount = 0;
+      }
+    },
+
+    setTypingUser: (state, action) => {
+      const chatId = Number(action.payload.chatId);
+      const userId = action.payload.userId;
+      const key = String(chatId);
+
+      state.typingUsers = {
+        ...state.typingUsers,
+        [key]: state.typingUsers[key]
+          ? [...state.typingUsers[key], userId]
+          : [userId],
+      };
+
+      state.typingUsers[key] = [...new Set(state.typingUsers[key])];
+    },
+
+    removeTypingUser: (state, action) => {
+      const chatId = Number(action.payload.chatId);
+      const userId = action.payload.userId;
+      const key = String(chatId);
+
+      if (state.typingUsers[key]) {
+        state.typingUsers = {
+          ...state.typingUsers,
+          [key]: state.typingUsers[key].filter((id) => id !== userId),
+        };
       }
     },
   },
@@ -155,5 +188,8 @@ export const {
   updateLastMessage,
   incrementUnread,
   resetUnread,
+  setOpenedChatId,
+  setTypingUser,
+  removeTypingUser,
 } = chatSlice.actions;
 export default chatSlice.reducer;

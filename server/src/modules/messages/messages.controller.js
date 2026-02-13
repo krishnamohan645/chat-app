@@ -121,6 +121,19 @@ const searchMessages = async (req, res, next) => {
   }
 };
 
+const sendSticker = async (req, res) => {
+  const { chatId } = req.params;
+  const { stickerUrl } = req.body; // this is emoji
+
+  const msg = await messageService.sendStickerMessage(
+    chatId,
+    req.user.id,
+    stickerUrl,
+  );
+
+  res.status(201).json(msg);
+};
+
 module.exports = {
   sendMessage,
   getMessages,
@@ -131,4 +144,5 @@ module.exports = {
   sendFileMessage,
   searchMessages,
   readAllMessages,
+  sendSticker,
 };

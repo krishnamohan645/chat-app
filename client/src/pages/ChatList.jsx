@@ -11,9 +11,7 @@ const ChatList = () => {
   const { chats, loading, myUserId } = useSelector((state) => state.chats);
   console.log(chats, myUserId, "chats in chatlist");
 
-  const { isAuthenticated, authLoading } = useSelector(
-    (state) => state.auth,
-  );
+  const { isAuthenticated, authLoading } = useSelector((state) => state.auth);
 
   // ✅ hooks always run
   useEffect(() => {
@@ -22,8 +20,6 @@ const ChatList = () => {
       dispatch(getChatList());
     }
   }, [isAuthenticated, authLoading, dispatch]);
-
-  // Socket listeners
 
   if (loading) return <p>Loading...</p>;
 

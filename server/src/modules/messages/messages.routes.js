@@ -25,6 +25,8 @@ router.post(
   messageController.sendFileMessage,
 );
 
+router.post("/sticker", auth, messageController.sendSticker);
+
 router.get("/search", auth, messageController.searchMessages);
 
 module.exports = router;

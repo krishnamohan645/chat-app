@@ -2,6 +2,7 @@ const { Server } = require("socket.io");
 const { Devices, Users, MessageStatus, Messages, Call } = require("../models");
 const { sendPushToUser } = require("../services/push.service");
 const jwt = require("jsonwebtoken");
+const { Op } = require("sequelize");
 
 let io;
 
@@ -37,7 +38,6 @@ const initSocket = (server) => {
 
       // Verify JWT token
       const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-      // socket.userId = decoded.userId;
       socket.userId = decoded.userId;
       socket.user = decoded;
 
@@ -57,10 +57,14 @@ const initSocket = (server) => {
       console.log("SOCKET EVENT:", event, data);
     });
 
-    // CHAT ROOMS
+    // ============================================
+    // CHAT ROOMS - JOIN CHAT
+    // ============================================
     socket.on("join-chat", async (chatId) => {
+      console.log(`📥 User ${socket.userId} joining chat ${chatId}`);
       socket.join(`chat-${chatId}`);
 
+      // ✅ Step 1: Mark as delivered
       await MessageStatus.update(
         { status: "delivered" },
         {
@@ -78,41 +82,89 @@ const initSocket = (server) => {
           ],
         },
       );
+
+      // ✅ Step 2: Mark as read
+      await MessageStatus.update(
+        { status: "read" },
+        {
+          where: {
+            userId: socket.userId,
+            status: { [Op.ne]: "read" },
+          },
+          include: [
+            {
+              model: Messages,
+              required: true,
+              where: { chatId },
+            },
+          ],
+        },
+      );
+
+      // ✅ Step 3: Notify other users in chat
+      socket.to(`chat-${chatId}`).emit("message-delivered", {
+        chatId,
+        userId: socket.userId,
+      });
+
+      socket.to(`chat-${chatId}`).emit("messages-read", {
+        chatId: chatId,
+        readerId: socket.userId,
+      });
+
+      console.log(`✅ Messages marked as read for chat ${chatId}`);
     });
 
+    // ============================================
+    // MESSAGE READ (SEPARATE EVENT)
+    // ============================================
+    socket.on("messages-read", async ({ chatId }) => {
+      console.log(
+        `📖 User ${socket.userId} marking messages as read in chat ${chatId}`,
+      );
+
+      try {
+        await MessageStatus.update(
+          { status: "read" },
+          {
+            where: {
+              userId: socket.userId,
+              status: { [Op.ne]: "read" },
+            },
+            include: [
+              {
+                model: Messages,
+                required: true,
+                where: { chatId },
+              },
+            ],
+          },
+        );
+
+        // 🔔 NOTIFY SENDER(S) that messages were read
+        socket.to(`chat-${chatId}`).emit("messages-read", {
+          chatId: chatId,
+          readerId: socket.userId,
+        });
+
+        console.log(`✅ messages-read event emitted for chat ${chatId}`);
+      } catch (error) {
+        console.error("Error marking messages as read:", error);
+      }
+    });
+
+    // ============================================
+    // LEAVE CHAT
+    // ============================================
     socket.on("leave-chat", (chatId) => {
       socket.leave(`chat-${chatId}`);
+      console.log(`📤 User ${socket.userId} left chat ${chatId}`);
     });
 
     // USER ROOM (notifications)
     socket.on("join-user", () => {
       socket.join(`user-${socket.userId}`);
-
-      // setTimeout(() => {
-      //   const realChatId = 13; // one that exists in state
-
-      //   io.to(`user-${socket.userId}`).emit("chat-list:update", {
-      //     chatId: realChatId,
-      //     senderId: 17,
-      //     lastMessage: {
-      //       text: "REAL TEST",
-      //       createdAt: new Date(),
-      //     },
-      //   });
-      // }, 1000);
     });
-
-    // HANDSHAKE AUTH (presence)
-    // const userId = socket.handshake.auth?.userId;
-
-    // if (!userId) {
-    //   socket.disconnect(true);
-    //   return;
-    // }
-
-    // socket.userId = userId;
-
-    // console.log("socket connected userId:", userId);
 
     // Use socket.userId from JWT middleware
     console.log("socket connected userId:", socket.userId);
@@ -144,17 +196,32 @@ const initSocket = (server) => {
 
     // TYPING INDICATOR
     socket.on("typing:start", ({ chatId }) => {
+      console.log(
+        `✍️ typing:start from user ${socket.userId} in chat ${chatId}`,
+      );
+      console.log(`📡 Broadcasting to room: chat-${chatId}`);
+      console.log(
+        `👥 Sockets in room:`,
+        io.sockets.adapter.rooms.get(`chat-${chatId}`)?.size || 0,
+      );
       if (!socket.userId) return;
-      socket.to(`chat-${chatId}`).emit("typing:start", {
-        chatId,
+
+      const chatIdNum = Number(chatId); // ✅ Ensure it's a number
+
+      socket.to(`chat-${chatIdNum}`).emit("typing:start", {
+        chatId: chatIdNum, // ✅ Send as number
         userId: socket.userId,
       });
     });
 
     socket.on("typing:stop", ({ chatId }) => {
+      console.log(`typing:stop from user ${socket.userId} in chat ${chatId}`);
       if (!socket.userId) return;
-      socket.to(`chat-${chatId}`).emit("typing:stop", {
-        chatId,
+
+      const chatIdNum = Number(chatId); // ✅ Ensure it's a number
+
+      socket.to(`chat-${chatIdNum}`).emit("typing:stop", {
+        chatId: chatIdNum, // ✅ Send as number
         userId: socket.userId,
       });
     });
