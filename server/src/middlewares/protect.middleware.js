@@ -15,11 +15,11 @@ const protect = async (req, res, next) => {
     // 🔍 DEBUG (keep for now)
     console.log("ACCESS TOKEN:", token);
     const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-  console.log("DECODED TOKEN:", decoded);
+    console.log("DECODED TOKEN:", decoded);
     const user = await Users.findByPk(decoded.userId, {
       attributes: ["id", "username", "email", "isActive"],
     });
-    console.log(user, "user in protect");
+    // console.log(user, "user in protect");
     if (!user || user.isActive !== true) {
       return res.status(400).json({
         message: "User not Authorized",

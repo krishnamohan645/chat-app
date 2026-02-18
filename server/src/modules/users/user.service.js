@@ -1,5 +1,5 @@
 const { Op } = require("sequelize");
-const { Users } = require("../../models");
+const { Users, BlockedUser, Devices } = require("../../models");
 const bcrypt = require("bcryptjs");
 
 const getMyProfile = async (userId) => {
@@ -115,6 +115,98 @@ const getUserPresence = async (userId) => {
   return user;
 };
 
+const searchUsers = async (search, currentUserId) => {
+  return await Users.findAll({
+    where: {
+      id: {
+        [Op.ne]: currentUserId,
+      },
+      username: {
+        [Op.iLike]: `%${search}%`,
+      },
+      isActive: true,
+    },
+    attributes: [
+      "id",
+      "username",
+      "profile_img",
+      "isOnline",
+      "bio",
+      "lastSeen",
+      "email",
+    ],
+    limit: 20,
+  });
+};
+
+const blockUser = async (blockerId, blockedId) => {
+  if (blockerId === blockedId) {
+    throw new Error("You cannot block yourself");
+  }
+  await BlockedUser.findOrCreate({ where: { blockerId, blockedId } });
+};
+
+const unblockUser = async (blockerId, blockedId) => {
+  await BlockedUser.destroy({ where: { blockerId, blockedId } });
+};
+const blockedUsers = async (userId) => {
+  return await BlockedUser.findAll({
+    where: {
+      blockerId: userId,
+    },
+    include: [
+      {
+        model: Users,
+        as: "blockedUser",
+        attributes: ["id", "username", "profile_img", "isOnline"],
+      },
+    ],
+    order: [["createdAt", "DESC"]],
+  });
+};
+
+const registerDevice = async (userId, deviceType, pushToken) => {
+  if (!deviceType || !pushToken) {
+    throw new Error("Device type and push token are required");
+  }
+
+  const device = await Devices.upsert({
+    userId,
+    deviceType,
+    pushToken,
+    lastActiveAt: new Date(),
+  });
+  return device;
+};
+
+const getUserProfile = async (targetUserId, requesterId) => {
+  const user = await Users.findByPk(targetUserId, {
+    attributes: { exclude: ["password"] },
+  });
+
+  if (!user) throw new Error("User not found");
+
+  const isBlockedByMe = await BlockedUser.findOne({
+    where: {
+      blockerId: requesterId,
+      blockedId: targetUserId,
+    },
+  });
+
+  const hasBlockedMe = await BlockedUser.findOne({
+    where: {
+      blockerId: targetUserId,
+      blockedId: requesterId,
+    },
+  });
+
+  return {
+    user,
+    isBlockedByMe: !!isBlockedByMe,
+    hasBlockedMe: !!hasBlockedMe,
+  };
+};
+
 module.exports = {
   getMyProfile,
   updateProfile,
@@ -123,4 +215,10 @@ module.exports = {
   getOnlineUsers,
   updateStatus,
   getUserPresence,
+  searchUsers,
+  blockUser,
+  unblockUser,
+  blockedUsers,
+  registerDevice,
+  getUserProfile,
 };

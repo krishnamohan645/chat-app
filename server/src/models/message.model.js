@@ -23,7 +23,16 @@ const Message = sequelize.define(
     },
 
     type: {
-      type: DataTypes.ENUM("text", "image", "file", "system"),
+      type: DataTypes.ENUM(
+        "text",
+        "image",
+        "file",
+        "system",
+        "video",
+        "audio",
+        "document",
+        "sticker",
+      ),
       defaultValue: "text",
     },
     fileUrl: {
@@ -43,6 +52,10 @@ const Message = sequelize.define(
     mimeType: {
       type: DataTypes.STRING,
       allowNull: true,
+    },
+    isEdited: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
   },
   {

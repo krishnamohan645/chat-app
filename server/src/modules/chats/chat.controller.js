@@ -23,10 +23,18 @@ const createPrivateChat = async (req, res, next) => {
 
 const createGroupChat = async (req, res, next) => {
   try {
+    let members = req.body.members;
+
+    if (typeof members === "string") {
+      members = JSON.parse(members);
+    }
+
     const chat = await chatService.createGroupChat(
       req.user.id,
       req.body.name,
-      req.body.members,
+      members,
+      req.body.description,
+      req.file,
     );
     res.status(201).json({
       chat,
@@ -121,6 +129,36 @@ const unMuteChat = async (req, res, next) => {
   }
 };
 
+const searchChats = async (req, res, next) => {
+  try {
+    const chats = await chatService.searchChats(req.user.id, req.query.search);
+    res.status(200).json(chats);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getChatList = async (req, res, next) => {
+  try {
+    const chats = await chatService.getChatList(req.user.id);
+    res.json({ chats });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getSingleChat = async (req, res, next) => {
+  try {
+    const chat = await chatService.getSingleChat(
+      req.params.chatId,
+      req.user.id,
+    );
+    res.status(200).json({ chat });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createPrivateChat,
   createGroupChat,
@@ -131,4 +169,7 @@ module.exports = {
   leaveGroup,
   muteChat,
   unMuteChat,
+  searchChats,
+  getChatList,
+  getSingleChat,
 };

@@ -1,50 +1,62 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import MainLayout from "./components/layout/MainLayout";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ChatList from "./pages/ChatList";
-import Chat from "./pages/Chat";
-import GroupChat from "./pages/GroupChat";
-import Groups from "./pages/Groups";
-import Notifications from "./pages/Notifications";
-import Profile from "./pages/Profile";
-import EditProfile from "./pages/EditProfile";
-import Settings from "./pages/Settings";
-import UserSearch from "./pages/UserSearch";
-import AudioCall from "./pages/AudioCall";
-import VideoCall from "./pages/VideoCall";
-import NotFound from "./pages/NotFound";
+import { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { ToastContainer } from "react-toastify";
+import { initAuth } from "./features/auth/authSlice";
+import AuthWatcher from "./AuthWatcher";
+import AppRoutes from "./routes/AppRoutes";
+import { setMyUserId } from "./features/chats/chatSlice";
+import { fetchBlockedUsersThunk } from "./features/user/userSlice";
 
 const App = () => {
+  const dispatch = useDispatch();
+  const { isAuthenticated, user, authLoading } = useSelector(
+    (state) => state.auth,
+  );
+
+  // Initialize auth on mount
+  useEffect(() => {
+    console.log("🚀 App starting, initializing auth...");
+    dispatch(initAuth());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      dispatch(setMyUserId(user.id));
+      dispatch(fetchBlockedUsersThunk());
+    }
+  }, [isAuthenticated, user?.id, dispatch]);
+
+  //  Show loading screen until auth check completes
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          backgroundColor: "#1a1a1a",
+          color: "white",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: "24px", marginBottom: "10px" }}>
+            Loading...
+          </div>
+          <div style={{ fontSize: "14px", opacity: 0.7 }}>
+            Checking authentication
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Auth Routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-
-        {/* Main App Routes */}
-        <Route element={<MainLayout />}>
-          <Route path="/chats" element={<ChatList />} />
-          <Route path="/chat/:id" element={<Chat />} />
-          <Route path="/groups" element={<Groups />} />
-          <Route path="/group/:id" element={<GroupChat />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/profile/edit" element={<EditProfile />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/search" element={<UserSearch />} />
-        </Route>
-
-        {/* Call Routes (Fullscreen) */}
-        <Route path="/call/audio" element={<AudioCall />} />
-        <Route path="/call/video" element={<VideoCall />} />
-
-        {/* Redirects */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+    <>
+      <ToastContainer />
+      <AuthWatcher />
+      <AppRoutes />
+    </>
   );
 };
 

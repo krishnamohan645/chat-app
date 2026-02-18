@@ -10,6 +10,8 @@ module.exports = ({
   UserSettings,
   UserBlocks,
   Notification,
+  BlockedUser,
+  Call,
 }) => {
   // Users ↔ Chats (M:M)
   Users.belongsToMany(Chats, {
@@ -52,7 +54,7 @@ module.exports = ({
   RefreshTokens.belongsTo(Users, { foreignKey: "userId" });
 
   // Users → UserSettings (1:1)
-  Users.hasOne(UserSettings, { foreignKey: "userId" , as: "user_setting" });
+  Users.hasOne(UserSettings, { foreignKey: "userId", as: "user_setting" });
   UserSettings.belongsTo(Users, { foreignKey: "userId" });
 
   // User Blocks (self join)
@@ -74,4 +76,15 @@ module.exports = ({
   // Notifications → Chats
   Chats.hasMany(Notification, { foreignKey: "chatId" });
   Notification.belongsTo(Chats, { foreignKey: "chatId" });
+
+  // Blocked Users (self join)
+  BlockedUser.belongsTo(Users, { foreignKey: "blockedId", as: "blockedUser" });
+
+  // Users -> Calls(caller)
+  Users.hasMany(Call, { foreignKey: "callerId", as: "outgoingCalls" });
+  Call.belongsTo(Users, { foreignKey: "callerId", as: "caller" });
+
+  // Users -> Calls (receiver)
+  Users.hasMany(Call, { foreignKey: "receiverId", as: "incomingCalls" });
+  Call.belongsTo(Users, { foreignKey: "receiverId", as: "receiver" });
 };
