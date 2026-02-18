@@ -1,11 +1,14 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import {
+  blockUserAPI,
   changePasswordAPI,
   getAllUsersAPI,
+  getBlockedUsersAPI,
   getMyProfileAPI,
   getUserProfileAPI,
   registerDeviceAPI,
   searchUsersAPI,
+  unblockUserAPI,
   updateProfileAPI,
 } from "./userAPI";
 
@@ -105,6 +108,43 @@ export const getUserProfile = createAsyncThunk(
   },
 );
 
+export const blockUserThunk = createAsyncThunk(
+  "user/blockUser",
+  async (userId, { rejectWithValue }) => {
+    try {
+      const res = await blockUserAPI(userId);
+      console.log(res.data, "ressss in blockUser");
+      return userId;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message);
+    }
+  },
+);
+
+export const unblockUserThunk = createAsyncThunk(
+  "user/unblockUser",
+  async (userId, { rejectWithValue }) => {
+    try {
+      await unblockUserAPI(userId);
+      return userId;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message);
+    }
+  },
+);
+
+export const fetchBlockedUsersThunk = createAsyncThunk(
+  "user/getBlockedUsers",
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await getBlockedUsersAPI();
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message);
+    }
+  },
+);
+
 const userSlice = createSlice({
   name: "user",
   initialState: {
@@ -114,6 +154,7 @@ const userSlice = createSlice({
     error: null,
     searchUsers: [],
     selectedUser: null,
+    blockedUsers: [],
   },
   reducers: {
     clearSearch: (state) => {
@@ -204,6 +245,20 @@ const userSlice = createSlice({
       })
       .addCase(getUserProfile.rejected, (state) => {
         state.loading = false;
+      });
+
+    // GET BLOCKED USERS
+    builder
+      .addCase(fetchBlockedUsersThunk.fulfilled, (state, action) => {
+        state.blockedUsers = action.payload.map((b) => b.blockedId);
+      })
+      .addCase(blockUserThunk.fulfilled, (state, action) => {
+        state.blockedUsers.push(action.payload);
+      })
+      .addCase(unblockUserThunk.fulfilled, (state, action) => {
+        state.blockedUsers = state.blockedUsers.filter(
+          (id) => id !== action.payload,
+        );
       });
   },
 });

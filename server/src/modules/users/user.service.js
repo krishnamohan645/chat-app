@@ -179,12 +179,32 @@ const registerDevice = async (userId, deviceType, pushToken) => {
   return device;
 };
 
-const getUserProfile = async (userId) => {
-  const user = await Users.findByPk(userId,  {
+const getUserProfile = async (targetUserId, requesterId) => {
+  const user = await Users.findByPk(targetUserId, {
     attributes: { exclude: ["password"] },
   });
+
   if (!user) throw new Error("User not found");
-  return user;
+
+  const isBlockedByMe = await BlockedUser.findOne({
+    where: {
+      blockerId: requesterId,
+      blockedId: targetUserId,
+    },
+  });
+
+  const hasBlockedMe = await BlockedUser.findOne({
+    where: {
+      blockerId: targetUserId,
+      blockedId: requesterId,
+    },
+  });
+
+  return {
+    user,
+    isBlockedByMe: !!isBlockedByMe,
+    hasBlockedMe: !!hasBlockedMe,
+  };
 };
 
 module.exports = {

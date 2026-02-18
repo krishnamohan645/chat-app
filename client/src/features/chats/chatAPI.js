@@ -9,5 +9,7 @@ export const getMyChatsAPI = (limit = 20) => {
 };
 
 export const getChatListAPI = () => {
+  
   return api.get("/chat/list");
 };
+

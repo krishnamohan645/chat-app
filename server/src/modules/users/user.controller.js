@@ -1,3 +1,4 @@
+const { getIO } = require("../../socket/socket");
 const userService = require("./user.service");
 
 const getMyProfile = async (req, res, next) => {
@@ -90,6 +91,20 @@ const searchUsers = async (req, res, next) => {
 const blockUser = async (req, res, next) => {
   try {
     await userService.blockUser(req.user.id, req.params.userId);
+
+    const io = getIO();
+
+    // Notify the blocker's clients to refresh
+    io.to(`user-${req.user.id}`).emit("block-status-changed", {
+      blockedUserId: Number(req.params.userId),
+      isBlocked: true,
+    });
+
+    // Notify the blocked user
+    io.to(`user-${req.params.userId}`).emit("blocked-by-user", {
+      blockerId: req.user.id,
+    });
+
     res.json({ message: "User blocked successfully" });
   } catch (err) {
     next(err);
@@ -99,6 +114,20 @@ const blockUser = async (req, res, next) => {
 const unblockUser = async (req, res, next) => {
   try {
     await userService.unblockUser(req.user.id, req.params.userId);
+
+    const io = getIO();
+
+    // Notify the unblocker's clients to refresh
+    io.to(`user-${req.user.id}`).emit("block-status-changed", {
+      blockedUserId: Number(req.params.userId),
+      isBlocked: false,
+    });
+
+    // Notify the unblocked user
+    io.to(`user-${req.params.userId}`).emit("unblocked-by-user", {
+      blockerId: req.user.id,
+    });
+
     res.json({ message: "User unblocked successfully" });
   } catch (err) {
     next(err);
@@ -150,7 +179,7 @@ const getUserProfile = async (req, res, next) => {
       });
     }
 
-    const user = await userService.getUserProfile(targetUserId);
+    const user = await userService.getUserProfile(targetUserId, requesterId);
     res.status(200).json({
       user,
       message: "User profile fetched successfully",

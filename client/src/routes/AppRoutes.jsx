@@ -35,7 +35,7 @@ const AppRoutes = () => {
           <Route path="/chats" element={<ChatList />} />
           <Route path="/chat/:chatId" element={<Chat />} />
           <Route path="/groups" element={<Groups />} />
-          <Route path="/group/:id" element={<GroupChat />} />
+          <Route path="/group/:chatId" element={<GroupChat />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/edit" element={<EditProfile />} />

@@ -4,6 +4,7 @@ import {
   updateLastMessage,
   setTypingUser,
   removeTypingUser,
+  setActiveChat, // ✅ Add this import
 } from "../features/chats/chatSlice";
 import {
   addMessage,
@@ -12,6 +13,12 @@ import {
   markDelivered,
   markRead,
 } from "../features/messages/messagesSlice";
+import {
+  updateGroupLastMessage,
+  incrementGroupUnread,
+  updateGroupMemberCount,
+  getGroupMembersThunk,
+} from "../features/groups/groupsSlice";
 import { getSocket } from "./socket";
 
 let listenersRegistered = false;
@@ -38,6 +45,10 @@ export const registerSocketListeners = (dispatch) => {
   // CHAT LIST
   socket.on("chat-list:update", (payload) => {
     console.log("📨 chat-list:update received:", payload);
+
+    const state = store.getState();
+    const myUserId = state.auth.user?.id;
+
     dispatch(
       updateLastMessage({
         chatId: payload.chatId,
@@ -45,6 +56,25 @@ export const registerSocketListeners = (dispatch) => {
       }),
     );
     dispatch(incrementUnread(payload));
+
+    // ✅ If this is a group, also update group slice
+    if (payload.type === "group") {
+      dispatch(
+        updateGroupLastMessage({
+          chatId: payload.chatId,
+          message: payload.lastMessage,
+        }),
+      );
+
+      dispatch(
+        incrementGroupUnread({
+          chatId: payload.chatId,
+          senderId: payload.lastMessage.senderId,
+          myUserId,
+          openedChatId: null, // we improve this later
+        }),
+      );
+    }
   });
 
   // NEW MESSAGE
@@ -79,7 +109,7 @@ export const registerSocketListeners = (dispatch) => {
     dispatch(editMessage({ chatId, messageId, content }));
   });
 
-  // ✅ TYPING START - with detailed logging
+  // TYPING START
   socket.on("typing:start", ({ chatId, userId }) => {
     console.log("🎯🎯🎯 typing:start LISTENER FIRED!", { chatId, userId });
     console.log("Socket ID that received:", socket.id);
@@ -87,7 +117,6 @@ export const registerSocketListeners = (dispatch) => {
     const myUserId = store.getState().user.user.id;
     console.log("My user ID:", myUserId, "Typer ID:", userId);
 
-    // Don't show typing indicator for myself
     if (userId === myUserId) {
       console.log("⛔ Ignoring - I'm the one typing");
       return;
@@ -96,22 +125,93 @@ export const registerSocketListeners = (dispatch) => {
     console.log("✅ Dispatching setTypingUser to Redux");
     dispatch(setTypingUser({ chatId: Number(chatId), userId }));
 
-    // Verify Redux updated
     setTimeout(() => {
       const typingState = store.getState().chats.typingUsers;
       console.log("📊 Redux typingUsers state:", typingState);
     }, 50);
   });
 
-  // ✅ TYPING STOP
+  // TYPING STOP
   socket.on("typing:stop", ({ chatId, userId }) => {
     console.log("🎯 typing:stop LISTENER FIRED!", { chatId, userId });
     dispatch(removeTypingUser({ chatId: Number(chatId), userId }));
   });
 
+  // ✅ BLOCK STATUS CHANGED (when I block/unblock someone)
+  socket.on("block-status-changed", ({ blockedUserId, isBlocked }) => {
+    console.log("🔒 block-status-changed received:", {
+      blockedUserId,
+      isBlocked,
+    });
+
+    const { activeChat } = store.getState().chats;
+
+    // Update activeChat if it's the affected user
+    if (activeChat && activeChat.otherUserId === blockedUserId) {
+      console.log("✅ Updating activeChat block status");
+      dispatch(
+        setActiveChat({
+          ...activeChat,
+          isBlockedByMe: isBlocked,
+        }),
+      );
+    }
+  });
+
+  // ✅ BLOCKED BY USER (when someone blocks me)
+  socket.on("blocked-by-user", ({ blockerId }) => {
+    console.log("🚫 blocked-by-user received:", { blockerId });
+
+    const { activeChat } = store.getState().chats;
+
+    // Update activeChat if it's the blocker
+    if (activeChat && activeChat.otherUserId === blockerId) {
+      console.log("✅ Someone blocked me - updating activeChat");
+      dispatch(
+        setActiveChat({
+          ...activeChat,
+          hasBlockedMe: true,
+        }),
+      );
+    }
+  });
+
+  // ✅ UNBLOCKED BY USER (when someone unblocks me)
+  socket.on("unblocked-by-user", ({ blockerId }) => {
+    console.log("✅ unblocked-by-user received:", { blockerId });
+
+    const { activeChat } = store.getState().chats;
+
+    // Update activeChat if it's the unblocker
+    if (activeChat && activeChat.otherUserId === blockerId) {
+      console.log("✅ Someone unblocked me - updating activeChat");
+      dispatch(
+        setActiveChat({
+          ...activeChat,
+          hasBlockedMe: false,
+        }),
+      );
+    }
+  });
+
   console.log("✅ All socket listeners registered successfully");
 
-  // ✅ Verify listeners are attached
+  // ✅ GROUP MEMBERS UPDATED (add/remove/leave)
+  socket.on("group:members-updated", ({ chatId, memberCount }) => {
+    console.log("👥 group:members-updated received:", { chatId, memberCount });
+    dispatch(updateGroupMemberCount({ chatId: Number(chatId), memberCount }));
+    dispatch(getGroupMembersThunk(chatId)); // re-fetch fresh member list
+  });
+
+  // ✅ GROUP SYSTEM MESSAGE (member added/removed/left)
+  socket.on("receive-message", (msg) => {
+    console.log("📩 receive-message (group system):", msg);
+    if (msg.type === "system") {
+      dispatch(addMessage(msg));
+    }
+  });
+
+  // Verify listeners are attached
   const events = Object.keys(socket._callbacks || {}).map((e) =>
     e.replace("$", ""),
   );

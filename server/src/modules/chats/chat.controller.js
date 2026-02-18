@@ -23,10 +23,18 @@ const createPrivateChat = async (req, res, next) => {
 
 const createGroupChat = async (req, res, next) => {
   try {
+    let members = req.body.members;
+
+    if (typeof members === "string") {
+      members = JSON.parse(members);
+    }
+
     const chat = await chatService.createGroupChat(
       req.user.id,
       req.body.name,
-      req.body.members,
+      members,
+      req.body.description,
+      req.file,
     );
     res.status(201).json({
       chat,
@@ -139,6 +147,17 @@ const getChatList = async (req, res, next) => {
   }
 };
 
+const getSingleChat = async (req, res, next) => {
+  try {
+    const chat = await chatService.getSingleChat(
+      req.params.chatId,
+      req.user.id,
+    );
+    res.status(200).json({ chat });
+  } catch (err) {
+    next(err);
+  }
+};
 
 module.exports = {
   createPrivateChat,
@@ -151,5 +170,6 @@ module.exports = {
   muteChat,
   unMuteChat,
   searchChats,
-  getChatList
+  getChatList,
+  getSingleChat,
 };

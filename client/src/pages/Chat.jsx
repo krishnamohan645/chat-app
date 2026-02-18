@@ -39,6 +39,7 @@ import { API_BASE_URL } from "../config/constants";
 import "./styles.css";
 import { getSocket } from "../socket/socket";
 import EmojiPicker from "emoji-picker-react";
+import { blockUserThunk, unblockUserThunk } from "../features/user/userSlice";
 
 const Chat = () => {
   const { chatId } = useParams();
@@ -58,6 +59,9 @@ const Chat = () => {
     return users[Number(chatIdNum)] || users[String(chatIdNum)] || [];
   });
 
+  const isBlockedByMe = activeChat?.isBlockedByMe;
+  const hasBlockedMe = activeChat?.hasBlockedMe;
+  const isChatBlocked = isBlockedByMe || hasBlockedMe;
   const isSomeoneTyping =
     typingUsers && typingUsers.some((id) => id !== myUserId);
 
@@ -88,6 +92,7 @@ const Chat = () => {
   const activeMessageRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const fileInputRef = useRef(null);
+  const isLoadingMoreRef = useRef(false);
 
   // File validation constants
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
@@ -142,9 +147,8 @@ const Chat = () => {
     searchResults &&
     searchResults.length === 0;
 
-  // ✅ FIXED: File utility functions
+  // File utility functions
   const validateFile = (file) => {
-    // ✅ Flatten all allowed types into one array
     const allAllowedTypes = [
       ...ALLOWED_FILE_TYPES.image,
       ...ALLOWED_FILE_TYPES.video,
@@ -153,12 +157,10 @@ const Chat = () => {
       ...ALLOWED_FILE_TYPES.archive,
     ];
 
-    // Check file size
     if (file.size > MAX_FILE_SIZE) {
       return `${file.name} is too large. Max size is 100MB.`;
     }
 
-    // Check file type
     if (!allAllowedTypes.includes(file.type)) {
       return `${file.name} is not a supported file type.`;
     }
@@ -199,23 +201,19 @@ const Chat = () => {
   const getFileIcon = (file) => {
     const type = file.type.toLowerCase();
 
-    // Images
     if (type.startsWith("image/")) {
       if (type.includes("gif")) return "🎞️";
       return "🖼️";
     }
 
-    // Videos
     if (type.startsWith("video/")) {
       return "🎥";
     }
 
-    // Audio
     if (type.startsWith("audio/")) {
       return "🎵";
     }
 
-    // Documents
     if (type.includes("pdf")) return "📄";
     if (type.includes("word") || type.includes("document")) return "📝";
     if (type.includes("excel") || type.includes("sheet")) return "📊";
@@ -224,7 +222,6 @@ const Chat = () => {
     if (type.includes("text")) return "📃";
     if (type.includes("csv")) return "📈";
 
-    // Archives
     if (type.includes("zip") || type.includes("rar")) return "📦";
 
     return "📎";
@@ -329,6 +326,7 @@ const Chat = () => {
   }, [chatIdNum]);
 
   useEffect(() => {
+    if (isLoadingMoreRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [displayedMessages]);
 
@@ -360,14 +358,13 @@ const Chat = () => {
   }, [messageMenuOpen]);
 
   useEffect(() => {
-    if (!messagesContainerRef.current) return;
+    if (!messagesContainerRef.current || isLoadingMoreRef.current) return;
 
     const container = messagesContainerRef.current;
 
-    // Only auto scroll if user is already near bottom
     const isNearBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight <
-      100;
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    100;
 
     if (isNearBottom) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -394,8 +391,8 @@ const Chat = () => {
 
     const handleScroll = () => {
       const isNearBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight <
-        150;
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      150;
 
       setShowScrollDown(!isNearBottom);
     };
@@ -404,6 +401,7 @@ const Chat = () => {
 
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
+
 
   // Handlers
   const handleViewProfile = () => {
@@ -483,33 +481,46 @@ const Chat = () => {
     setMessageMenuOpen(null);
   };
 
-  const loadMoreMessages = () => {
+  const loadMoreMessages = async () => {
     if (isLoadingMore || !hasMore) return;
 
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    const previousHeight = container.scrollHeight;
+    const previousScrollHeight = container.scrollHeight;
+    const previousScrollTop = container.scrollTop;
 
     setIsLoadingMore(true);
+    isLoadingMoreRef.current = true;
 
-    const nextOffset = offset + 20; // Assuming page size of 20
+    const nextOffset = offset + 20;
 
-    const result = dispatch(
-      getMessages({ chatId: chatIdNum, limit: 20, offset: nextOffset }),
-    ).unwrap();
+    try {
+      const result = await dispatch(
+        getMessages({ chatId: chatIdNum, limit: 20, offset: nextOffset }),
+      ).unwrap();
 
-    if (result.length < 20) {
-      setHasMore(false);
+      if (result.length < 20) {
+        setHasMore(false);
+      }
+
+      setOffset(nextOffset);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const newScrollHeight = container.scrollHeight;
+          const scrollDiff = newScrollHeight - previousScrollHeight;
+          container.scrollTop = previousScrollTop + scrollDiff;
+
+          isLoadingMoreRef.current = false;
+          setIsLoadingMore(false);
+        });
+      });
+    } catch (error) {
+      console.error("Failed to load more messages:", error);
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
     }
-
-    setOffset(nextOffset);
-    setIsLoadingMore(false);
-
-    setTimeout(() => {
-      const newHeight = container.scrollHeight;
-      container.scrollTop = newHeight - previousHeight;
-    }, 0); // Wait for messages to render
   };
 
   if (!activeChat) return null;
@@ -599,9 +610,41 @@ const Chat = () => {
                 <button className="w-full px-4 py-2 text-left text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
                   Mute Notifications
                 </button>
-                <button className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg">
-                  Block User
-                </button>
+                {!isBlockedByMe ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await dispatch(
+                          blockUserThunk(activeChat.otherUserId),
+                        ).unwrap();
+                        setDropdownOpen(false);
+                      } catch (err) {
+                        console.error("Failed to block user:", err);
+                        alert("Failed to block user. Please try again.");
+                      }
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
+                  >
+                    Block User
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await dispatch(
+                          unblockUserThunk(activeChat.otherUserId),
+                        ).unwrap();
+                        setDropdownOpen(false);
+                      } catch (err) {
+                        console.error("Failed to unblock user:", err);
+                        alert("Failed to unblock user. Please try again.");
+                      }
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
+                  >
+                    Unblock User
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -705,12 +748,14 @@ const Chat = () => {
                       <MoreVertical className="h-3 w-3 text-gray-600 dark:text-gray-300" />
                     </button>
                   )}
+
                   {/* Message content rendering */}
-                  {msg.type === "system" && <span>{msg.content}</span>}{" "}
+                  {msg.type === "system" && <span>{msg.content}</span>}
                   {msg.type === "sticker" && (
                     <span className="text-5xl">{msg.content}</span>
                   )}
                   {msg.type === "text" && msg.content}
+
                   {/* Image */}
                   {msg.type === "image" && msg.fileUrl && (
                     <img
@@ -726,6 +771,7 @@ const Chat = () => {
                       }}
                     />
                   )}
+
                   {/* Video */}
                   {msg.type === "video" && msg.fileUrl && (
                     <video
@@ -742,6 +788,7 @@ const Chat = () => {
                       Your browser does not support the video tag.
                     </video>
                   )}
+
                   {/* Audio */}
                   {msg.type === "audio" && msg.fileUrl && (
                     <div className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg">
@@ -755,6 +802,7 @@ const Chat = () => {
                       </audio>
                     </div>
                   )}
+
                   {/* Document or File */}
                   {(msg.type === "document" || msg.type === "file") &&
                     msg.fileUrl && (
@@ -794,9 +842,11 @@ const Chat = () => {
                         <span className="text-xl">⬇️</span>
                       </a>
                     )}
+
                   {msg.isEdited && (
                     <span className="text-[9px] ml-2 opacity-70">edited</span>
                   )}
+
                   {msg.type !== "system" && (
                     <div
                       className={`flex items-center gap-1 text-[10px] px-1 mt-1 ${
@@ -825,10 +875,10 @@ const Chat = () => {
                       )}
                     </div>
                   )}
+
                   {messageMenuOpen === msg.id && (
                     <div
-                      className={`absolute right-0 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50
-                      ${
+                      className={`absolute right-0 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 ${
                         dropdownDirection === "up"
                           ? "bottom-full mb-1"
                           : "top-full mt-1"
@@ -904,15 +954,56 @@ const Chat = () => {
 
         {showScrollDown && (
           <button
-            onClick={() =>
-              messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-            }
-            className="absolute bottom-24 right-6 bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg transition-all"
+            onClick={() => {
+              messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+              setShowScrollDown(false);
+            }}
+            className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg transition-all hover:scale-110 z-10"
+            aria-label="Scroll to bottom"
           >
-            ↓
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 14l-7 7m0 0l-7-7m7 7V3"
+              />
+            </svg>
           </button>
         )}
       </div>
+
+      {/* ================= BLOCK STATUS BANNERS ================= */}
+      {hasBlockedMe && (
+        <div className="p-3 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 text-sm text-center">
+          You cannot message this user
+        </div>
+      )}
+
+      {isBlockedByMe && (
+        <div className="p-3 bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 text-sm flex justify-between items-center">
+          <span>You blocked this user</span>
+          <button
+            onClick={async () => {
+              try {
+                await dispatch(
+                  unblockUserThunk(activeChat.otherUserId),
+                ).unwrap();
+              } catch (err) {
+                console.error("Failed to unblock:", err);
+              }
+            }}
+            className="text-blue-500 underline hover:text-blue-600"
+          >
+            Unblock
+          </button>
+        </div>
+      )}
 
       {/* ================= INPUT ================= */}
       <div className="flex-col p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shrink-0">
@@ -959,6 +1050,7 @@ const Chat = () => {
           </div>
         )}
 
+        {/* Sticker Picker */}
         {showStickerPicker && (
           <div className="absolute bottom-20 left-4 z-50">
             <EmojiPicker
@@ -966,7 +1058,7 @@ const Chat = () => {
                 dispatch(
                   sendStickerThunk({
                     chatId: chatIdNum,
-                    stickerUrl: emojiData.emoji, // store emoji itself
+                    stickerUrl: emojiData.emoji,
                   }),
                 );
                 setShowStickerPicker(false);
@@ -982,7 +1074,8 @@ const Chat = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowStickerPicker(!showStickerPicker)}
-            className="p-2 text-gray-500"
+            className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            disabled={isChatBlocked}
           >
             <Smile className="h-5 w-5" />
           </button>
@@ -990,7 +1083,7 @@ const Chat = () => {
           <button
             onClick={() => fileInputRef.current?.click()}
             className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white shrink-0"
-            disabled={isSending}
+            disabled={isSending || isChatBlocked}
           >
             <Paperclip className="h-5 w-5" />
           </button>
@@ -1007,6 +1100,7 @@ const Chat = () => {
           <input
             type="text"
             value={message}
+            disabled={isSending || isChatBlocked}
             onChange={(e) => {
               const value = e.target.value;
               setMessage(value);
@@ -1034,15 +1128,22 @@ const Chat = () => {
               }
             }}
             onKeyPress={handleKeyPress}
-            placeholder="Type a message..."
-            disabled={isSending}
-            className="flex-1 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg px-4 py-2 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder={
+              hasBlockedMe
+                ? "You cannot message this user"
+                : isBlockedByMe
+                  ? "You blocked this user"
+                  : "Type a message..."
+            }
+            className="flex-1 bg-gray-100 dark:bg-gray-700 border-0 rounded-lg px-4 py-2 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
           />
 
           <button
             onClick={handleSendMessage}
             disabled={
-              (!message.trim() && selectedFiles.length === 0) || isSending
+              isChatBlocked ||
+              (!message.trim() && selectedFiles.length === 0) ||
+              isSending
             }
             className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
           >

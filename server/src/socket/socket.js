@@ -57,6 +57,9 @@ const initSocket = (server) => {
       console.log("SOCKET EVENT:", event, data);
     });
 
+    socket.join(`user-${socket.userId}`);
+    console.log(`👤 User ${socket.userId} joined their user room`);
+    
     // ============================================
     // CHAT ROOMS - JOIN CHAT
     // ============================================

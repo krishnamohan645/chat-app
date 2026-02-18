@@ -27,4 +27,16 @@ export const searchUsersAPI = (query) => {
 export const getUserProfileAPI = (userId) => {
   console.log(userId, "userId in userAPI");
   return api.get(`/user/user-profile/${userId}`);
-}
+};
+
+export const blockUserAPI = (userId) => {
+  return api.post(`/user/${userId}/block`);
+};
+
+export const unblockUserAPI = (userId) => {
+  return api.delete(`/user/${userId}/block`);
+};
+
+export const getBlockedUsersAPI = () => {
+  return api.get("/user/blocked");
+};

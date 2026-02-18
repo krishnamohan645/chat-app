@@ -3,8 +3,9 @@ import { useDispatch, useSelector } from "react-redux";
 import { ToastContainer } from "react-toastify";
 import { initAuth } from "./features/auth/authSlice";
 import AuthWatcher from "./AuthWatcher";
-import AppRoutes from "./routes/AppRoutes"; 
+import AppRoutes from "./routes/AppRoutes";
 import { setMyUserId } from "./features/chats/chatSlice";
+import { fetchBlockedUsersThunk } from "./features/user/userSlice";
 
 const App = () => {
   const dispatch = useDispatch();
@@ -21,6 +22,7 @@ const App = () => {
   useEffect(() => {
     if (isAuthenticated && user?.id) {
       dispatch(setMyUserId(user.id));
+      dispatch(fetchBlockedUsersThunk());
     }
   }, [isAuthenticated, user?.id, dispatch]);
 
