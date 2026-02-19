@@ -25,3 +25,7 @@ export const removeGroupMemberAPI = (chatId, userId) => {
 export const leaveGroupAPI = (chatId) => {
   return api.post(`/chat/${chatId}/leave`);
 };
+
+export const getAllGroupMembersAPI = (chatId) => {
+  return api.get(`/chat/${chatId}/all-members`);
+};

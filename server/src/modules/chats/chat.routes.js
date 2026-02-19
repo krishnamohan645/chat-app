@@ -27,5 +27,10 @@ router.put("/:chatId/unmute", authMiddleware, chatController.unMuteChat);
 router.get("/search", authMiddleware, chatController.searchChats);
 router.get("/list", authMiddleware, chatController.getChatList);
 router.get("/:chatId", authMiddleware, chatController.getSingleChat);
+router.get(
+  "/:chatId/all-members",
+  authMiddleware,
+  chatController.getAllChatMembersIncludingLeft,
+);
 
 module.exports = router;

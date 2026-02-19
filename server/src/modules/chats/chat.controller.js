@@ -159,6 +159,18 @@ const getSingleChat = async (req, res, next) => {
   }
 };
 
+const getAllChatMembersIncludingLeft = async (req, res, next) => {
+  try {
+    const members = await chatService.getAllChatMembersIncludingLeft(
+      req.params.chatId,
+      req.user.id,
+    );
+    res.status(200).json({ members });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createPrivateChat,
   createGroupChat,
@@ -172,4 +184,5 @@ module.exports = {
   searchChats,
   getChatList,
   getSingleChat,
+  getAllChatMembersIncludingLeft,
 };

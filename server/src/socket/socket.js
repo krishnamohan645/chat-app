@@ -59,12 +59,17 @@ const initSocket = (server) => {
 
     socket.join(`user-${socket.userId}`);
     console.log(`👤 User ${socket.userId} joined their user room`);
-    
+
     // ============================================
     // CHAT ROOMS - JOIN CHAT
     // ============================================
     socket.on("join-chat", async (chatId) => {
       console.log(`📥 User ${socket.userId} joining chat ${chatId}`);
+      console.log(
+        "👥 Room members:",
+        io.sockets.adapter.rooms.get(`chat-${chatId}`),
+      );
+
       socket.join(`chat-${chatId}`);
 
       // ✅ Step 1: Mark as delivered

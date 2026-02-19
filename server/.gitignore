@@ -1,3 +1,5 @@
 node_modules
 .env
 src/config/firebase.serviceAccount.json
+fcm-test-html
+firebase-messaging-sw.js

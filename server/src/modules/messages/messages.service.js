@@ -9,7 +9,7 @@ const {
 } = require("../../models");
 const { notifyOnNewMessage } = require("../../notification/notificationHook");
 const { getIO, isUserOnline } = require("../../socket/socket");
-const { isMember } = require("../chats/chat.service");
+const { isMember, isMemberOrWasMember } = require("../chats/chat.service");
 const { deleteFileIfExists } = require("../../utils/file.util");
 
 const getprivateChat = async (chatId, senderId) => {
@@ -113,7 +113,7 @@ const sendMessage = async (chatId, userId, content) => {
   const chat = await Chats.findByPk(chatId, {
     attributes: ["type"],
   });
-  
+
   const sender = await Users.findByPk(userId, {
     attributes: ["username"],
   });
@@ -155,7 +155,9 @@ const sendMessage = async (chatId, userId, content) => {
 };
 
 const getMessages = async (chatId, userId, limit, offset) => {
-  await isMember(chatId, userId);
+  const membership = await isMemberOrWasMember(chatId, userId);
+
+  console.log(`📨 Fetching messages for chat ${chatId}, user ${userId}`);
 
   console.log(`📨 Fetching messages for chat ${chatId}, user ${userId}`);
 
@@ -169,6 +171,17 @@ const getMessages = async (chatId, userId, limit, offset) => {
   });
 
   const deletedMessageIds = deletedForMe.map((d) => d.messageId);
+
+  // ✅ Build query with leftAt filter
+  const whereClause = {
+    chatId,
+    id: { [Op.notIn]: deletedMessageIds.length ? deletedMessageIds : [0] },
+  };
+
+  // 🔥 If user has left, only show messages BEFORE they left
+  if (membership.leftAt) {
+    whereClause.createdAt = { [Op.lte]: membership.leftAt };
+  }
 
   // ✅ Step 1: Fetch messages WITHOUT includes
   const messages = await Messages.findAll({
@@ -418,11 +431,6 @@ const sendFileMessage = async (chatId, userId, file) => {
   if (uploadsIndex !== -1) {
     relativeFileUrl = "/" + relativeFileUrl.substring(uploadsIndex);
   }
-
-  console.log("📁 File type:", type);
-  console.log("📁 MIME type:", file.mimetype);
-  console.log("📁 File path:", file.path);
-  console.log("🌐 Relative URL:", relativeFileUrl);
 
   const msg = await Messages.create({
     chatId,

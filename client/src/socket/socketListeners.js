@@ -198,9 +198,13 @@ export const registerSocketListeners = (dispatch) => {
 
   // ✅ GROUP MEMBERS UPDATED (add/remove/leave)
   socket.on("group:members-updated", ({ chatId, memberCount }) => {
+    console.log("🔥 BEFORE UPDATE:", store.getState().group.groups);
     console.log("👥 group:members-updated received:", { chatId, memberCount });
     dispatch(updateGroupMemberCount({ chatId: Number(chatId), memberCount }));
     dispatch(getGroupMembersThunk(chatId)); // re-fetch fresh member list
+    setTimeout(() => {
+      console.log("🔥 AFTER UPDATE:", store.getState().group.groups);
+    }, 100);
   });
 
   // ✅ GROUP SYSTEM MESSAGE (member added/removed/left)

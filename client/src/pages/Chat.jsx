@@ -402,7 +402,6 @@ const Chat = () => {
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
-
   // Handlers
   const handleViewProfile = () => {
     if (activeChat.type === "group") return;
@@ -526,7 +525,7 @@ const Chat = () => {
   if (!activeChat) return null;
 
   return (
-    <div className="h-[calc(100vh-4rem)] lg:h-[43vw] flex flex-col bg-white dark:bg-gray-900 overflow-hidden">
+    <div className="h-[calc(100vh-4rem)] lg:h-[41vw] flex flex-col bg-white dark:bg-gray-900 overflow-hidden">
       {/* ================= HEADER ================= */}
       <div className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-3">

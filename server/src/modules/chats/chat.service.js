@@ -11,12 +11,11 @@ const { notifyGroupEvent } = require("../../notification/notificationHook");
 const { getIO } = require("../../socket/socket");
 
 // Helpers
+
 const findExistingPrivateChat = async (userA, userB) => {
   const chatIds = await GroupMembers.findAll({
     where: {
-      userId: {
-        [Op.in]: [userA, userB],
-      },
+      userId: { [Op.in]: [userA, userB] },
       leftAt: null,
     },
     attributes: ["chatId"],
@@ -25,39 +24,37 @@ const findExistingPrivateChat = async (userA, userB) => {
   });
 
   const ids = chatIds.map((chat) => chat.chatId);
-
   if (!ids.length) return null;
 
   return Chats.findOne({
-    where: {
-      id: {
-        [Op.in]: ids,
-      },
-      type: "private",
-    },
+    where: { id: { [Op.in]: ids }, type: "private" },
   });
 };
 
+// Active members only (for write operations)
 const isMember = async (chatId, userId) => {
   const member = await GroupMembers.findOne({
-    where: {
-      chatId,
-      userId,
-      leftAt: null,
-    },
+    where: { chatId, userId, leftAt: null },
   });
   if (!member) throw new Error("Not a member");
   return member;
 };
 
-const isAdmin = async (chatId, userId) => {
-  const member = await isMember(chatId, userId);
-  if (member.role !== "admin") {
-    throw new Error("Admin access required");
-  }
+// ✅ Active OR past member (for read operations — left users can still view)
+const isMemberOrWasMember = async (chatId, userId) => {
+  const member = await GroupMembers.findOne({
+    where: { chatId, userId },
+  });
+  if (!member) throw new Error("Not a member of this group");
+  return member;
 };
 
-const ensureGroupChat = async (chatId, userId, members = []) => {
+const isAdmin = async (chatId, userId) => {
+  const member = await isMember(chatId, userId);
+  if (member.role !== "admin") throw new Error("Admin access required");
+};
+
+const ensureGroupChat = async (chatId) => {
   const chat = await Chats.findByPk(chatId, { attributes: ["type"] });
   if (!chat || chat.type !== "group") {
     throw new Error("operation allowed only in group chats");
@@ -65,15 +62,36 @@ const ensureGroupChat = async (chatId, userId, members = []) => {
   return chat;
 };
 
-// Services
-const createPrivateChat = async (myId, otherUserId) => {
-  if (!otherUserId) {
-    throw new Error("otherUserId is required");
-  }
+const createSystemMessage = async (chatId, content) => {
+  const io = getIO();
 
-  if (myId === otherUserId) {
+  const msg = await Messages.create({
+    chatId,
+    senderId: null, // system messages have no sender
+    type: "system",
+    content,
+  });
+
+  io.to(`chat-${chatId}`).emit("receive-message", {
+    id: msg.id,
+    chatId: Number(chatId),
+    type: "system",
+    content,
+    createdAt: msg.createdAt,
+    senderId: null,
+  });
+
+  return msg;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Services
+// ─────────────────────────────────────────────────────────────────────────────
+
+const createPrivateChat = async (myId, otherUserId) => {
+  if (!otherUserId) throw new Error("otherUserId is required");
+  if (myId === otherUserId)
     throw new Error("Cannot create private chat with yourself");
-  }
 
   const isBlocked = await BlockedUser.findOne({
     where: {
@@ -83,31 +101,14 @@ const createPrivateChat = async (myId, otherUserId) => {
       ],
     },
   });
-
-  if (isBlocked) {
-    throw new Error("You are blocked by the other user");
-  }
+  if (isBlocked) throw new Error("You are blocked by the other user");
 
   const existingChat = await findExistingPrivateChat(myId, otherUserId);
+  if (existingChat) return { chat: existingChat, isNew: false };
 
-  if (existingChat)
-    return {
-      chat: existingChat,
-      isNew: false,
-    };
-
-  const chat = await Chats.create({
-    type: "private",
-    createdBy: myId,
-  });
-
+  const chat = await Chats.create({ type: "private", createdBy: myId });
   await GroupMembers.bulkCreate([
-    {
-      chatId: chat.id,
-      userId: myId,
-      role: "member",
-      joinedAt: new Date(),
-    },
+    { chatId: chat.id, userId: myId, role: "member", joinedAt: new Date() },
     {
       chatId: chat.id,
       userId: otherUserId,
@@ -126,29 +127,21 @@ const createGroupChat = async (
   description,
   file,
 ) => {
-  if (!name) {
-    throw new Error("Group name is required");
-  }
-
-  if (!Array.isArray(members)) {
-    throw new Error("Members must be an array");
-  }
+  if (!name) throw new Error("Group name is required");
+  if (!Array.isArray(members)) throw new Error("Members must be an array");
 
   let groupImage = null;
-  if (file) {
-    groupImage = "/uploads/images/" + file.filename;
-  }
+  if (file) groupImage = "/uploads/images/" + file.filename;
 
   const chat = await Chats.create({
     type: "group",
     name,
     description,
-    groupImage: groupImage,
+    groupImage,
     createdBy: createdId,
   });
 
   const uniqueMembers = [...new Set([...members, createdId])];
-
   await GroupMembers.bulkCreate(
     uniqueMembers.map((userId) => ({
       chatId: chat.id,
@@ -160,10 +153,7 @@ const createGroupChat = async (
 
   const fullChat = await Chats.findByPk(chat.id, {
     include: [
-      {
-        model: GroupMembers,
-        attributes: ["userId", "role", "joinedAt"],
-      },
+      { model: GroupMembers, attributes: ["userId", "role", "joinedAt"] },
     ],
   });
   return fullChat;
@@ -174,10 +164,7 @@ const getMyChats = async (userId, limit = 20) => {
     include: [
       {
         model: GroupMembers,
-        where: {
-          userId,
-          leftAt: null,
-        },
+        where: { userId, leftAt: null },
         attributes: [],
       },
     ],
@@ -187,13 +174,29 @@ const getMyChats = async (userId, limit = 20) => {
 };
 
 const getChatMembers = async (chatId, userId) => {
-  await isMember(chatId, userId);
+  await isMemberOrWasMember(chatId, userId);
 
   return GroupMembers.findAll({
-    where: {
-      chatId,
-      leftAt: null,
-    },
+    where: { chatId, leftAt: null },
+    attributes: ["userId", "role", "joinedAt", "leftAt"], // ✅ Include all fields
+    include: [
+      {
+        model: Users,
+        as: "user",
+        attributes: ["id", "username", "profile_img", "isOnline"], // ✅ Add isOnline
+      },
+    ],
+  });
+};
+
+// ✅ Returns ALL members including those who left
+// Used to resolve sender names on old messages
+const getAllChatMembersIncludingLeft = async (chatId, userId) => {
+  await isMemberOrWasMember(chatId, userId); // left users can call this too
+
+  return GroupMembers.findAll({
+    where: { chatId },
+    attributes: ["userId", "role", "joinedAt", "leftAt"],
     include: [
       {
         model: Users,
@@ -210,10 +213,7 @@ const addGroupMembers = async (chatId, userId, members = []) => {
   await ensureGroupChat(chatIdNum);
   await isAdmin(chatIdNum, userId);
 
-  // get ALL records (active + left users)
-  const existing = await GroupMembers.findAll({
-    where: { chatId: chatIdNum },
-  });
+  const existing = await GroupMembers.findAll({ where: { chatId: chatIdNum } });
 
   const activeMembers = existing
     .filter((m) => m.leftAt === null)
@@ -223,49 +223,21 @@ const addGroupMembers = async (chatId, userId, members = []) => {
     .filter((m) => m.leftAt !== null)
     .map((m) => Number(m.userId));
 
-  // users never added before
   const toInsert = members.filter(
     (id) => !activeMembers.includes(id) && !leftMembers.includes(Number(id)),
   );
-
-  // users who left earlier (restore)
   const toRestore = members.filter((id) => leftMembers.includes(Number(id)));
 
-  // restore old members
   if (toRestore.length) {
     await GroupMembers.update(
       { leftAt: null },
       { where: { chatId, userId: toRestore } },
     );
 
-    // notify restored members
-    for (const memberId of toRestore) {
-      await notifyGroupEvent({
-        chatId,
-        senderId: userId,
-        type: "GROUP_ADD",
-        title: "Added to Group",
-        body: "You have been added back to the group",
-        onlyUserId: memberId,
-      });
-    }
-  }
-
-  // insert new members
-  if (toInsert.length) {
-    await GroupMembers.bulkCreate(
-      toInsert.map((userId) => ({
-        chatId,
-        userId,
-        role: "member",
-        joinedAt: new Date(),
-      })),
-    );
-
     const io = getIO();
 
     const newCount = await GroupMembers.count({
-      where: { chatIdNum, leftAt: null },
+      where: { chatId: chatIdNum, leftAt: null },
     });
 
     io.to(`chat-${chatId}`).emit("group:members-updated", {
@@ -273,15 +245,49 @@ const addGroupMembers = async (chatId, userId, members = []) => {
       memberCount: newCount,
     });
 
-    io.to(`user-${userId}`).emit("receive-message", {
+    for (const memberId of toRestore) {
+      const user = await Users.findByPk(memberId, {
+        attributes: ["username"],
+      });
+
+      await createSystemMessage(chatId, `${user.username} joined the group`);
+    }
+  }
+
+  if (toInsert.length) {
+    await GroupMembers.bulkCreate(
+      toInsert.map((uid) => ({
+        chatId,
+        userId: uid,
+        role: "member",
+        joinedAt: new Date(),
+      })),
+    );
+
+    const io = getIO();
+    const newCount = await GroupMembers.count({
+      where: { chatId: chatIdNum, leftAt: null },
+    });
+    console.log(
+      "Emitting members-updated to room:",
+      `chat-${chatId}`,
+      newCount,
+    );
+
+    io.to(`chat-${chatId}`).emit("group:members-updated", {
       chatId: chatIdNum,
-      type: "system",
-      content: `${toInsert.length} new member(s) added to the group`,
-      createdAt: new Date().toISOString(),
-      id: Date.now(),
+      memberCount: newCount,
     });
 
-    // notify new members
+    // ✅ Saved to DB so it persists on reload
+    for (const memberId of toInsert) {
+      const user = await Users.findByPk(memberId, {
+        attributes: ["username"],
+      });
+
+      await createSystemMessage(chatId, `${user.username} joined the group`);
+    }
+
     for (const memberId of toInsert) {
       await notifyGroupEvent({
         chatId,
@@ -297,7 +303,6 @@ const addGroupMembers = async (chatId, userId, members = []) => {
   if (!toInsert.length && !toRestore.length) {
     return { message: "No new members to add" };
   }
-
   return { message: "Members added successfully" };
 };
 
@@ -305,34 +310,20 @@ const removeGroupMember = async (chatId, adminId, userId) => {
   await ensureGroupChat(chatId);
   await isAdmin(chatId, adminId);
 
-  // admin cannot remove himself
   if (Number(adminId) === Number(userId)) {
     throw new Error("Admin cannot remove himself");
   }
 
   const target = await GroupMembers.findOne({
-    where: {
-      chatId,
-      userId,
-      leftAt: null,
-    },
+    where: { chatId, userId, leftAt: null },
   });
+  if (!target) throw new Error("Member not found");
 
-  if (!target) {
-    throw new Error("Member not found");
-  }
-
-  // if admin is being removed → assign new admin first
   if (target.role === "admin") {
     const nextAdmin = await GroupMembers.findOne({
-      where: {
-        chatId,
-        leftAt: null,
-        userId: { [Op.ne]: userId },
-      },
+      where: { chatId, leftAt: null, userId: { [Op.ne]: userId } },
       order: [["joinedAt", "ASC"]],
     });
-
     if (nextAdmin) {
       await GroupMembers.update(
         { role: "admin" },
@@ -341,37 +332,54 @@ const removeGroupMember = async (chatId, adminId, userId) => {
     }
   }
 
-  // remove member
-  await GroupMembers.update(
-    { leftAt: new Date(), role: "member" },
+  // ✅ TICK FIX: clear removed user's pending statuses so others get double-tick
+  await MessageStatus.update(
+    { status: "read" },
     {
-      where: {
-        chatId,
-        userId,
-      },
+      where: { userId, status: { [Op.ne]: "read" } },
+      include: [
+        {
+          model: Messages,
+          required: true,
+          where: { chatId },
+          attributes: [],
+        },
+      ],
     },
   );
 
-  // ✅ emit socket events
+  await GroupMembers.update(
+    { leftAt: new Date(), role: "member" },
+    { where: { chatId, userId } },
+  );
+
   const io = getIO();
   const newCount = await GroupMembers.count({
     where: { chatId, leftAt: null },
   });
+
+  console.log("Emitting members-updated to room:", `chat-${chatId}`, newCount);
 
   io.to(`chat-${chatId}`).emit("group:members-updated", {
     chatId: Number(chatId),
     memberCount: newCount,
   });
 
-  io.to(`chat-${chatId}`).emit("receive-message", {
-    chatId: Number(chatId),
-    type: "system",
-    content: "A member was removed from the group",
-    createdAt: new Date().toISOString(),
-    id: Date.now(),
+  // ✅ Saved to DB so it persists on reload
+  // ✅ Get usernames for better system message
+  const removedUser = await Users.findByPk(userId, {
+    attributes: ["username"],
   });
 
-  // 🔔 notify removed member
+  const adminUser = await Users.findByPk(adminId, {
+    attributes: ["username"],
+  });
+
+  await createSystemMessage(
+    chatId,
+    `${removedUser.username} was removed by ${adminUser.username}`,
+  );
+
   await notifyGroupEvent({
     chatId,
     senderId: adminId,
@@ -386,17 +394,11 @@ const leaveGroup = async (chatId, userId) => {
   await ensureGroupChat(chatId);
   const member = await isMember(chatId, userId);
 
-  // if admin leaves → assign new admin FIRST
   if (member.role === "admin") {
     const nextAdmin = await GroupMembers.findOne({
-      where: {
-        chatId,
-        leftAt: null,
-        userId: { [Op.ne]: userId },
-      },
+      where: { chatId, leftAt: null, userId: { [Op.ne]: userId } },
       order: [["joinedAt", "ASC"]],
     });
-
     if (nextAdmin) {
       await GroupMembers.update(
         { role: "admin" },
@@ -405,7 +407,22 @@ const leaveGroup = async (chatId, userId) => {
     }
   }
 
-  // mark user as left
+  // ✅ TICK FIX: clear leaving user's pending statuses so others get double-tick
+  await MessageStatus.update(
+    { status: "read" },
+    {
+      where: { userId, status: { [Op.ne]: "read" } },
+      include: [
+        {
+          model: Messages,
+          required: true,
+          where: { chatId },
+          attributes: [],
+        },
+      ],
+    },
+  );
+
   await GroupMembers.update(
     { leftAt: new Date(), role: "member" },
     { where: { chatId, userId } },
@@ -416,34 +433,21 @@ const leaveGroup = async (chatId, userId) => {
     where: { chatId, leftAt: null },
   });
 
-  io.to(String(chatId)).emit("group:members-updated", {
+  console.log("Emitting members-updated to room:", `chat-${chatId}`, newCount);
+
+  io.to(`chat-${chatId}`).emit("group:members-updated", {
     chatId: Number(chatId),
     memberCount: newCount,
   });
 
-  io.to(String(chatId)).emit("receive-message", {
-    chatId: Number(chatId),
-    type: "system",
-    content: "A member left the group",
-    createdAt: new Date().toISOString(),
-    id: Date.now(),
+  // ✅ Saved to DB so it persists on reload
+  // ✅ Get username for system message
+  const user = await Users.findByPk(userId, {
+    attributes: ["username"],
   });
 
-  // In removeGroupMember — same pattern
-  io.to(String(chatId)).emit("group:members-updated", {
-    chatId: Number(chatId),
-    memberCount: newCount,
-  });
+  await createSystemMessage(chatId, `${user.username} left the group`);
 
-  io.to(String(chatId)).emit("receive-message", {
-    chatId: Number(chatId),
-    type: "system",
-    content: "A member was removed from the group",
-    createdAt: new Date().toISOString(),
-    id: Date.now(),
-  });
-
-  // 🔔 notify remaining group members
   await notifyGroupEvent({
     chatId,
     senderId: userId,
@@ -455,7 +459,6 @@ const leaveGroup = async (chatId, userId) => {
 
 const muteChat = async (chatId, userId, mute) => {
   await isMember(chatId, userId);
-
   await GroupMembers.update(
     { isMuted: mute },
     { where: { chatId, userId, leftAt: null } },
@@ -467,91 +470,89 @@ const searchChats = async (userId, search) => {
     include: [
       {
         model: GroupMembers,
-        where: {
-          userId,
-          leftAt: null,
-        },
+        where: { userId, leftAt: null },
         attributes: [],
       },
       {
         model: Users,
         attributes: ["id", "username", "profile_img"],
         through: { attributes: [] },
-        where: {
-          id: { [Op.ne]: userId },
-        },
+        where: { id: { [Op.ne]: userId } },
         required: false,
       },
     ],
-
     where: {
       [Op.or]: [
-        // ✅ GROUP chats → match group name only
-        {
-          type: "group",
-          name: {
-            [Op.iLike]: `%${search}%`,
-          },
-        },
-
-        // ✅ PRIVATE chats → match other user's name only
-        {
-          type: "private",
-          "$users.username$": {
-            [Op.iLike]: `%${search}%`,
-          },
-        },
+        { type: "group", name: { [Op.iLike]: `%${search}%` } },
+        { type: "private", "$users.username$": { [Op.iLike]: `%${search}%` } },
       ],
     },
-
     order: [["updatedAt", "DESC"]],
     distinct: true,
   });
 };
 
 const getChatList = async (userId) => {
+  // ✅ Fetch ALL chats the user was ever part of (active + left groups)
+  const memberships = await GroupMembers.findAll({
+    where: { userId },
+    attributes: ["chatId", "leftAt"],
+  });
+
+  const chatIds = memberships.map((m) => m.chatId);
+  if (!chatIds.length) return [];
+
+  // Build a map of chatId → leftAt for quick lookup
+  const leftAtMap = {};
+  for (const m of memberships) {
+    leftAtMap[m.chatId] = m.leftAt; // null means still active
+  }
+
   const chats = await Chats.findAll({
-    include: [
-      {
-        model: GroupMembers,
-        where: { userId, leftAt: null },
-        attributes: [],
-      },
-    ],
+    where: { id: { [Op.in]: chatIds } },
     order: [["updatedAt", "DESC"]],
   });
 
   const results = [];
 
   for (const chat of chats) {
+    const userLeftAt = leftAtMap[chat.id]; // null = active, Date = left
+
+    // For private chats, skip if user has left (private chats don't need "view after leave")
+    if (chat.type === "private" && userLeftAt) continue;
+
+    // ✅ Exclude system messages from last message preview
     const lastMessage = await Messages.findOne({
-      where: { chatId: chat.id },
+      where: {
+        chatId: chat.id,
+        type: { [Op.ne]: "system" },
+      },
       order: [["createdAt", "DESC"]],
-      include: [
-        {
-          model: Users,
-          attributes: ["username"],
-        },
-      ],
+      include: [{ model: Users, attributes: ["username"] }],
     });
 
-    const unreadCount = await MessageStatus.count({
-      where: {
-        userId,
-        status: { [Op.ne]: "read" },
-      },
-      include: [
-        {
-          model: Messages,
-          required: true,
-          where: {
-            chatId: chat.id,
-            senderId: { [Op.ne]: userId },
-          },
-          attributes: [],
+    // Unread count — only for active members (left members don't get new unreads)
+    let unreadCount = 0;
+    if (!userLeftAt) {
+      unreadCount = await MessageStatus.count({
+        where: {
+          userId,
+          status: { [Op.ne]: "read" },
         },
-      ],
-    });
+        include: [
+          {
+            model: Messages,
+            required: true,
+            where: {
+              chatId: chat.id,
+              senderId: { [Op.ne]: userId },
+              type: { [Op.ne]: "system" },
+            },
+            attributes: [],
+          },
+        ],
+      });
+    }
 
     let name = null;
     let avatar = null;
@@ -559,18 +560,13 @@ const getChatList = async (userId) => {
     let lastSeen = null;
     let memberCount = null;
     let otherUserId = null;
-    let isBlockedByMe = false; // ✅ Add this
-    let hasBlockedMe = false; // ✅ Add this
+    let isBlockedByMe = false;
+    let hasBlockedMe = false;
 
     if (chat.type === "private") {
       const otherMember = await GroupMembers.findOne({
-        where: {
-          chatId: chat.id,
-          userId: { [Op.ne]: userId },
-          leftAt: null,
-        },
+        where: { chatId: chat.id, userId: { [Op.ne]: userId }, leftAt: null },
       });
-
       if (!otherMember) continue;
 
       const otherUser = await Users.findByPk(otherMember.userId, {
@@ -583,25 +579,15 @@ const getChatList = async (userId) => {
       isOnline = otherUser.isOnline;
       lastSeen = otherUser.isOnline ? null : otherUser.lastSeen;
 
-      // ✅ Check block status for private chats
       const blockedByMe = await BlockedUser.findOne({
-        where: {
-          blockerId: userId,
-          blockedId: otherUserId,
-        },
+        where: { blockerId: userId, blockedId: otherUserId },
       });
-
       const blockedMe = await BlockedUser.findOne({
-        where: {
-          blockerId: otherUserId,
-          blockedId: userId,
-        },
+        where: { blockerId: otherUserId, blockedId: userId },
       });
-
       isBlockedByMe = !!blockedByMe;
       hasBlockedMe = !!blockedMe;
     } else {
-      // group chat
       name = chat.name;
       avatar = chat.groupImage;
       memberCount = await GroupMembers.count({
@@ -610,9 +596,8 @@ const getChatList = async (userId) => {
     }
 
     let previewText = null;
-
     if (lastMessage) {
-      const messageText =
+      previewText =
         lastMessage.type === "text"
           ? lastMessage.content
           : lastMessage.type === "image"
@@ -626,15 +611,7 @@ const getChatList = async (userId) => {
                   : lastMessage.type === "file"
                     ? "📎 File"
                     : lastMessage.content;
-
-      if (chat.type === "group") {
-        previewText = messageText;
-      } else {
-        previewText = messageText;
-      }
     }
-
-    console.log(lastMessage?.user?.username, "lastMessage?.user?.username");
 
     results.push({
       chatId: chat.id,
@@ -645,8 +622,10 @@ const getChatList = async (userId) => {
       isOnline,
       lastSeen,
       memberCount,
-      isBlockedByMe, // ✅ Add this
-      hasBlockedMe, // ✅ Add this
+      isBlockedByMe,
+      hasBlockedMe,
+      hasLeft: !!userLeftAt, // ✅ frontend uses this to show read-only mode
+      leftAt: userLeftAt || null, // ✅ when exactly they left
       lastMessage: lastMessage
         ? {
             id: lastMessage.id,
@@ -666,14 +645,12 @@ const getChatList = async (userId) => {
 };
 
 const getSingleChat = async (chatId, userId) => {
-  // Verify user is a member
-  await isMember(chatId, userId);
+  // ✅ Allow left members to view the chat (read-only)
+  const membership = await GroupMembers.findOne({ where: { chatId, userId } });
+  if (!membership) throw new Error("Chat not found");
 
   const chat = await Chats.findByPk(chatId);
-
-  if (!chat) {
-    throw new Error("Chat not found");
-  }
+  if (!chat) throw new Error("Chat not found");
 
   let result = {
     chatId: chat.id,
@@ -682,21 +659,15 @@ const getSingleChat = async (chatId, userId) => {
     isBlockedByMe: false,
     hasBlockedMe: false,
     otherUserId: null,
+    hasLeft: !!membership.leftAt, // ✅ tells frontend if user has left
+    leftAt: membership.leftAt || null,
   };
 
   if (chat.type === "private") {
-    // Get the other user
     const otherMember = await GroupMembers.findOne({
-      where: {
-        chatId: chat.id,
-        userId: { [Op.ne]: userId },
-        leftAt: null,
-      },
+      where: { chatId: chat.id, userId: { [Op.ne]: userId }, leftAt: null },
     });
-
-    if (!otherMember) {
-      throw new Error("Other user not found");
-    }
+    if (!otherMember) throw new Error("Other user not found");
 
     const otherUser = await Users.findByPk(otherMember.userId, {
       attributes: ["id", "username", "profile_img", "isOnline", "lastSeen"],
@@ -708,29 +679,19 @@ const getSingleChat = async (chatId, userId) => {
     result.isOnline = otherUser.isOnline;
     result.lastSeen = otherUser.isOnline ? null : otherUser.lastSeen;
 
-    // Check block status
     const blockedByMe = await BlockedUser.findOne({
-      where: {
-        blockerId: userId,
-        blockedId: otherUser.id,
-      },
+      where: { blockerId: userId, blockedId: otherUser.id },
     });
-
     const blockedMe = await BlockedUser.findOne({
-      where: {
-        blockerId: otherUser.id,
-        blockedId: userId,
-      },
+      where: { blockerId: otherUser.id, blockedId: userId },
     });
-
     result.isBlockedByMe = !!blockedByMe;
     result.hasBlockedMe = !!blockedMe;
   } else {
-    // Group chat
-    const memberCount = await GroupMembers.count({
+    result.memberCount = await GroupMembers.count({
       where: { chatId: chat.id, leftAt: null },
     });
-    result.memberCount = memberCount;
+    result.profile_img = chat.groupImage;
   }
 
   return result;
@@ -741,11 +702,13 @@ module.exports = {
   createGroupChat,
   getMyChats,
   getChatMembers,
+  getAllChatMembersIncludingLeft,
   addGroupMembers,
   removeGroupMember,
   leaveGroup,
   muteChat,
   isMember,
+  isMemberOrWasMember, // ✅ export for use in getMessages controller
   isAdmin,
   searchChats,
   getChatList,
