@@ -5,11 +5,12 @@ const {
   Devices,
   Notification,
 } = require("../models");
-const { getIO } = require("../socket/socket");
-
-const { isUserOnline } = require("../socket/socket");
+const { getIO, isUserOnline } = require("../socket/socket");
 const { sendPushToUser } = require("../services/push.service");
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTIFY ON NEW MESSAGE
+// ═══════════════════════════════════════════════════════════════════════════
 const notifyOnNewMessage = async (chatId, senderId, content) => {
   const members = await GroupMembers.findAll({
     where: { chatId, leftAt: null },
@@ -23,45 +24,31 @@ const notifyOnNewMessage = async (chatId, senderId, content) => {
             as: "user_setting",
             required: false,
           },
-          {
-            model: Devices,
-            as: "devices",
-            required: false,
-          },
         ],
       },
     ],
   });
 
-  // console.log(
-  //   "Notify check:",
-  //   members.map((m) => ({
-  //     userId: m.userId,
-  //     isMuted: m.isMuted,
-  //     hasSettings: !!m.user?.user_setting,
-  //     push: m.user?.user_setting?.pushNotifications,
-  //   })),
-  // );
-  // console.log(members[0]?.user, "userrrr");
+  const notificationsToCreate = [];
 
   for (const member of members) {
-    // skip sender
+    // Skip sender
     if (member.userId === senderId) {
       continue;
     }
 
-    // chat muted
+    // Skip if chat is muted
     if (member.isMuted) {
       continue;
     }
 
-    // Global notifications off
-    if (!member.user.user_setting?.pushNotifications) {
+    // Skip if global notifications are off
+    if (!member.user?.user_setting?.pushNotifications) {
       continue;
     }
 
-    // create notification
-    const notification = await Notification.create({
+    // Add to bulk create array
+    notificationsToCreate.push({
       userId: member.userId,
       senderId,
       chatId,
@@ -69,12 +56,38 @@ const notifyOnNewMessage = async (chatId, senderId, content) => {
       title: "New Message",
       body: content.length > 50 ? content.substring(0, 50) + "..." : content,
     });
+  }
 
-    getIO().to(`user-${member.userId}`).emit("notification", notification);
-    if (!isUserOnline(member.userId)) {
-      await sendPushToUser(member.userId, {
-        title: notification.title,
-        body: notification.body,
+  // Bulk create all notifications
+  if (notificationsToCreate.length === 0) return;
+
+  const createdNotifications = await Notification.bulkCreate(
+    notificationsToCreate,
+  );
+
+  // Emit socket events and send push notifications
+  for (const notification of createdNotifications) {
+    // Get full notification with sender info
+    const fullNotification = await Notification.findByPk(notification.id, {
+      include: [
+        {
+          model: Users,
+          as: "sender",
+          attributes: ["id", "username", "profile_img"],
+        },
+      ],
+    });
+
+    // ✅ FIX: Changed "notification" to "new-notification"
+    getIO()
+      .to(`user-${notification.userId}`)
+      .emit("new-notification", fullNotification);
+
+    // Send push notification if user is offline
+    if (!isUserOnline(notification.userId)) {
+      await sendPushToUser(notification.userId, {
+        title: fullNotification.title,
+        body: fullNotification.body,
         data: {
           type: "message",
           chatId: String(chatId),
@@ -85,47 +98,79 @@ const notifyOnNewMessage = async (chatId, senderId, content) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTIFY GROUP EVENT
+// ═══════════════════════════════════════════════════════════════════════════
 const notifyGroupEvent = async ({
   chatId,
   senderId,
   type,
   title,
   body,
-  onlyUserId = null, // used for Group_add
+  onlyUserId = null,
 }) => {
   const members = await GroupMembers.findAll({
     where: { chatId, leftAt: null },
   });
 
+  const notificationsToCreate = [];
+
   for (const member of members) {
-    //for GROUP_ADD -> notify only added user
+    // For GROUP_ADD -> notify only the added user
     if (onlyUserId && member.userId !== onlyUserId) {
       continue;
     }
 
-    // Skip sender (except GROUP_ADD where sender not equal to receiver)
+    // Skip sender (except GROUP_ADD where sender is not the receiver)
     if (!onlyUserId && member.userId === senderId) {
       continue;
     }
 
-    const notification = await Notification.create({
+    // ✅ FIX: Use the passed parameters, not undefined variables
+    notificationsToCreate.push({
       userId: member.userId,
       senderId,
       chatId,
-      type,
-      title,
-      body,
+      type,   // ✅ FIXED
+      title,  // ✅ FIXED
+      body,   // ✅ FIXED
+    });
+  }
+
+  // Bulk create all notifications
+  if (notificationsToCreate.length === 0) return;
+
+  const createdNotifications = await Notification.bulkCreate(
+    notificationsToCreate,
+  );
+
+  // Emit socket events and send push notifications
+  for (const notification of createdNotifications) {
+    // Get full notification with sender info
+    const fullNotification = await Notification.findByPk(notification.id, {
+      include: [
+        {
+          model: Users,
+          as: "sender",
+          attributes: ["id", "username", "profile_img"],
+        },
+      ],
     });
 
-    getIO().to(`user-${member.userId}`).emit("notification", notification);
+    // ✅ FIX: Changed "notification" to "new-notification"
+    getIO()
+      .to(`user-${notification.userId}`)
+      .emit("new-notification", fullNotification);
 
-    if (!isUserOnline(member.userId)) {
-      await sendPushToUser(member.userId, {
-        title,
-        body,
+    // Send push notification if user is offline
+    if (!isUserOnline(notification.userId)) {
+      await sendPushToUser(notification.userId, {
+        title: fullNotification.title,
+        body: fullNotification.body,
         data: {
           type,
           chatId: String(chatId),
+          senderId: senderId ? String(senderId) : null,
         },
       });
     }

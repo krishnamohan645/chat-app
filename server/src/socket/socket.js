@@ -60,9 +60,7 @@ const initSocket = (server) => {
     socket.join(`user-${socket.userId}`);
     console.log(`👤 User ${socket.userId} joined their user room`);
 
-    // ============================================
     // CHAT ROOMS - JOIN CHAT
-    // ============================================
     socket.on("join-chat", async (chatId) => {
       console.log(`📥 User ${socket.userId} joining chat ${chatId}`);
       console.log(
@@ -123,14 +121,8 @@ const initSocket = (server) => {
       console.log(`✅ Messages marked as read for chat ${chatId}`);
     });
 
-    // ============================================
     // MESSAGE READ (SEPARATE EVENT)
-    // ============================================
     socket.on("messages-read", async ({ chatId }) => {
-      console.log(
-        `📖 User ${socket.userId} marking messages as read in chat ${chatId}`,
-      );
-
       try {
         await MessageStatus.update(
           { status: "read" },
@@ -154,8 +146,6 @@ const initSocket = (server) => {
           chatId: chatId,
           readerId: socket.userId,
         });
-
-        console.log(`✅ messages-read event emitted for chat ${chatId}`);
       } catch (error) {
         console.error("Error marking messages as read:", error);
       }
@@ -173,9 +163,6 @@ const initSocket = (server) => {
     socket.on("join-user", () => {
       socket.join(`user-${socket.userId}`);
     });
-
-    // Use socket.userId from JWT middleware
-    console.log("socket connected userId:", socket.userId);
 
     // ONLINE LOGIC (FIXED)
     const count = (onlineUsers.get(socket.userId) || 0) + 1;
@@ -204,14 +191,6 @@ const initSocket = (server) => {
 
     // TYPING INDICATOR
     socket.on("typing:start", ({ chatId }) => {
-      console.log(
-        `✍️ typing:start from user ${socket.userId} in chat ${chatId}`,
-      );
-      console.log(`📡 Broadcasting to room: chat-${chatId}`);
-      console.log(
-        `👥 Sockets in room:`,
-        io.sockets.adapter.rooms.get(`chat-${chatId}`)?.size || 0,
-      );
       if (!socket.userId) return;
 
       const chatIdNum = Number(chatId); // ✅ Ensure it's a number
@@ -271,10 +250,17 @@ const initSocket = (server) => {
 
       activeCalls.set(call.id, { callerId, receiverId });
 
-      // ring receiver
+      // Ring receiver
       io.to(receiverSocketId).emit("call:incoming", {
         callId: call.id,
         callerId,
+        type,
+      });
+
+      // ✅ Tell caller the call was created
+      socket.emit("call:started", {
+        callId: call.id,
+        receiverId,
         type,
       });
 
@@ -316,9 +302,14 @@ const initSocket = (server) => {
 
     // calls accept
     socket.on("call:accept", async ({ callId }) => {
-      const callInfo = activeCalls.get(callId);
+      // ✅ ENSURE callId is a NUMBER
+      const callIdNum = Number(callId);
 
-      if (!callInfo) return;
+      let callInfo = activeCalls.get(callIdNum); // ✅ Use NUMBER
+
+      if (!callInfo) {
+        return;
+      }
 
       await Call.update(
         {
@@ -327,21 +318,36 @@ const initSocket = (server) => {
         },
         {
           where: {
-            id: callId,
+            id: callIdNum, // ✅ Use NUMBER
           },
         },
       );
 
-      // notify caller
+      // ✅ Mark call as accepted
+      callInfo.status = "accepted";
+      activeCalls.set(callIdNum, callInfo); // ✅ Use NUMBER
+
+      // Notify caller
       const callerSocketId = getUserSocketId(callInfo.callerId);
 
       if (callerSocketId) {
         io.to(callerSocketId).emit("call:accepted", {
-          callId,
+          callId: callIdNum, // ✅ Send as NUMBER
         });
       }
+      if (callInfo.pendingOffer) {
+        // Send directly to THIS socket (the one who just accepted)
+        setTimeout(() => {
+          socket.emit("webrtc:offer", {
+            callId: callIdNum, // ✅ Send as NUMBER
+            signal: callInfo.pendingOffer,
+          });
 
-      activeCalls.set(callId, callInfo);
+          console.log("✅ webrtc:offer emitted to receiver!");
+        }, 1000);
+      } else {
+        console.log("Call info:", JSON.stringify(callInfo, null, 2));
+      }
     });
 
     // Calls rejects
@@ -376,9 +382,13 @@ const initSocket = (server) => {
 
     // call end
     socket.on("call:end", async ({ callId }) => {
-      const callInfo = activeCalls.get(callId);
-      if (!callInfo) return;
+      const callIdNum = Number(callId);
 
+      const callInfo = activeCalls.get(callIdNum);
+
+      if (!callInfo) {
+        return;
+      }
       // update DB
       await Call.update(
         {
@@ -387,13 +397,12 @@ const initSocket = (server) => {
         },
         {
           where: {
-            id: callId,
+            id: callIdNum,
           },
         },
       );
 
       // notify the other user
-
       const otherUserId =
         socket.userId === callInfo.callerId
           ? callInfo.receiverId
@@ -403,12 +412,14 @@ const initSocket = (server) => {
 
       if (otherSocketId) {
         io.to(otherSocketId).emit("call:ended", {
-          callId,
+          callId: callIdNum,
         });
+      } else {
+        console.log("⚠️ Other user not connected, can't notify");
       }
 
       // cleanup
-      activeCalls.delete(callId);
+      activeCalls.delete(callIdNum);
     });
 
     // Mute mic for calls
@@ -485,13 +496,63 @@ const initSocket = (server) => {
           callId,
         });
       }
+    }); // ✅ CLOSE camera-on handler HERE
+
+    // ✅ WEBRTC OFFER - Now at correct level
+    socket.on("webrtc:offer", ({ callId, receiverId, signal }) => {
+      // ✅ ENSURE callId is a NUMBER
+      const callIdNum = Number(callId);
+
+      // ✅ Use NUMBER version
+      let callInfo = activeCalls.get(callIdNum);
+
+      if (!callInfo) {
+        callInfo = {
+          callerId: socket.userId,
+          receiverId: receiverId,
+        };
+      }
+
+      // ✅ Store the offer
+      callInfo.pendingOffer = signal;
+      activeCalls.set(callIdNum, callInfo); // ✅ Use NUMBER
+
+      // ✅ Check if call is already accepted
+      if (callInfo.status === "accepted") {
+        const receiverSocketId = getUserSocketId(receiverId);
+        if (receiverSocketId) {
+          io.to(receiverSocketId).emit("webrtc:offer", {
+            callId: callIdNum, // ✅ Send as NUMBER
+            signal,
+          });
+        }
+      } else {
+        console.log("⏳ Call not yet accepted, offer stored for later");
+      }
+    });
+
+    // ✅ WEBRTC ANSWER - Now at correct level
+    socket.on("webrtc:answer", ({ callId, signal }) => {
+      const callIdNum = Number(callId); // ✅ Convert to number
+      const callInfo = activeCalls.get(callIdNum);
+
+      if (!callInfo) {
+        console.error("❌ No call info for answer");
+        return;
+      }
+
+      const callerSocketId = getUserSocketId(callInfo.callerId);
+
+      if (callerSocketId) {
+        io.to(callerSocketId).emit("webrtc:answer", {
+          callId: callIdNum,
+          signal,
+        });
+      }
     });
 
     // DISCONNECT (FIXED)
     socket.on("disconnect", async () => {
-      console.log("User Disconnected:", socket.id);
-      console.log("socket disconnected", socket.userId);
-
       for (const [callId, callInfo] of Array.from(activeCalls.entries())) {
         if (
           callInfo.callerId === socket.userId ||

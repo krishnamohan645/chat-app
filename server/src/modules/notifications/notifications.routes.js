@@ -6,5 +6,6 @@ const notificationController = require("./notifications.controller");
 router.get("/", auth, notificationController.getNotifications);
 router.put("/:id/read", auth, notificationController.markAsRead);
 router.put("/read-all", auth, notificationController.markAllAsRead);
+router.get("/unread-count", auth, notificationController.getUnreadCount);
 
 module.exports = router;

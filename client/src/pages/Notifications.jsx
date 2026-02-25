@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import {
   MessageCircle,
   Users,
@@ -6,93 +5,155 @@ import {
   Phone,
   PhoneMissed,
   Bell,
-  Check,
   CheckCheck,
+  Loader2,
+  UserPlus,
+  UserMinus,
+  LogOut,
 } from "lucide-react";
-
-const mockNotifications = [
-  {
-    id: "1",
-    type: "message",
-    title: "Sarah Wilson",
-    description: "Sent you a message: Hey! Are you coming...",
-    avatar:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop",
-    time: "2m",
-    read: false,
-  },
-  {
-    id: "2",
-    type: "group_add",
-    title: "Dev Team",
-    description: "You were added to the group",
-    avatar:
-      "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=100&h=100&fit=crop",
-    time: "15m",
-    read: false,
-  },
-  {
-    id: "3",
-    type: "mention",
-    title: "Project Alpha",
-    description: "Mike mentioned you: @John can you review...",
-    avatar:
-      "https://images.unsplash.com/photo-1552664730-d307ca884978?w=100&h=100&fit=crop",
-    time: "1h",
-    read: false,
-  },
-  {
-    id: "4",
-    type: "call",
-    title: "Alex Chen",
-    description: "Incoming voice call",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
-    time: "2h",
-    read: true,
-  },
-  {
-    id: "5",
-    type: "missed_call",
-    title: "Emma Johnson",
-    description: "Missed video call",
-    avatar:
-      "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop",
-    time: "3h",
-    read: true,
-  },
-  {
-    id: "6",
-    type: "system",
-    title: "Account Security",
-    description: "Your password was changed successfully",
-    time: "1d",
-    read: true,
-  },
-];
+import { useEffect, useRef, useCallback } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import {
+  getNotificationsThunk,
+  markAsReadThunk,
+  markAllAsReadThunk,
+} from "../features/notifications/notificationsSlice";
+import { API_BASE_URL } from "../config/constants";
 
 const getNotificationIcon = (type) => {
-  switch (type) {
-    case "message":
+  switch (type.toUpperCase()) {
+    case "MESSAGE":
       return <MessageCircle className="h-4 w-4" />;
-    case "group_add":
-      return <Users className="h-4 w-4" />;
-    case "mention":
+    case "GROUP_ADD":
+      return <UserPlus className="h-4 w-4" />;
+    case "GROUP_REMOVE":
+      return <UserMinus className="h-4 w-4" />;
+    case "GROUP_LEAVE":
+      return <LogOut className="h-4 w-4" />;
+    case "MENTION":
       return <AtSign className="h-4 w-4" />;
-    case "call":
+    case "CALL":
       return <Phone className="h-4 w-4" />;
-    case "missed_call":
+    case "MISSED_CALL":
       return <PhoneMissed className="h-4 w-4" />;
-    case "system":
+    default:
       return <Bell className="h-4 w-4" />;
   }
 };
 
+const getTimeAgo = (dateString) => {
+  const now = new Date();
+  const past = new Date(dateString);
+  const seconds = Math.floor((now - past) / 1000);
+
+  if (seconds < 60) return "Just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+  if (seconds < 2592000) return `${Math.floor(seconds / 604800)}w ago`;
+  return past.toLocaleDateString();
+};
+
+const getNotificationColor = (type) => {
+  switch (type.toUpperCase()) {
+    case "MESSAGE":
+      return "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400";
+    case "GROUP_ADD":
+      return "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400";
+    case "GROUP_REMOVE":
+    case "GROUP_LEAVE":
+      return "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400";
+    case "MISSED_CALL":
+      return "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400";
+    case "CALL":
+      return "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400";
+    default:
+      return "bg-gray-100 dark:bg-gray-900/30 text-gray-600 dark:text-gray-400";
+  }
+};
+
 const Notifications = () => {
-  const unreadCount = mockNotifications.filter((n) => !n.read).length;
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const observerTarget = useRef(null);
+
+  const {
+    notifications,
+    unreadCount,
+    currentPage,
+    totalPages,
+    loading,
+    total,
+  } = useSelector((state) => state.notifications);
+
+  // ✅ Initial load
+  useEffect(() => {
+    dispatch(getNotificationsThunk({ page: 1 }));
+  }, [dispatch]);
+
+  // ✅ Intersection Observer for infinite scroll
+  const loadMore = useCallback(() => {
+    if (!loading && currentPage < totalPages) {
+      dispatch(getNotificationsThunk({ page: currentPage + 1 }));
+    }
+  }, [loading, currentPage, totalPages, dispatch]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
+      }
+    };
+  }, [loadMore]);
+
+  // ✅ Handle notification click
+  const handleNotificationClick = async (notification) => {
+    // Mark as read
+    if (!notification.isRead) {
+      dispatch(markAsReadThunk(notification.id));
+    }
+
+    // Navigate to chat
+    if (notification.chatId) {
+      // ✅ Detect if it's a group notification
+      const isGroupNotification =
+        notification.type === "GROUP_ADD" ||
+        notification.type === "GROUP_REMOVE" ||
+        notification.type === "GROUP_LEAVE";
+
+      // ✅ Navigate to correct route (singular, not plural)
+      if (isGroupNotification) {
+        navigate(`/group/${notification.chatId}`);
+      } else {
+        // For MESSAGE type, default to private chat
+        // (you might need to adjust this based on your app logic)
+        navigate(`/chat/${notification.chatId}`);
+      }
+    }
+  };
+  
+  // ✅ Mark all as read
+  const handleMarkAllAsRead = () => {
+    dispatch(markAllAsReadThunk());
+  };
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-white dark:bg-gray-900">
+      {/* ───── Header ───── */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <div>
@@ -104,69 +165,117 @@ const Notifications = () => {
                 {unreadCount} unread notification{unreadCount > 1 ? "s" : ""}
               </p>
             )}
+            {total > 0 && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                {total} total
+              </p>
+            )}
           </div>
-          <button className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 text-sm">
-            <CheckCheck className="h-4 w-4" />
-            Mark all read
-          </button>
+
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllAsRead}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2 text-sm"
+            >
+              <CheckCheck className="h-4 w-4" />
+              Mark all read
+            </button>
+          )}
         </div>
       </div>
 
+      {/* ───── Notifications List ───── */}
       <div className="flex-1 overflow-y-auto">
-        {mockNotifications.map((notification) => (
+        {notifications.length === 0 && !loading && (
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <Bell className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              No notifications yet
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              When you get notifications, they'll show up here
+            </p>
+          </div>
+        )}
+
+        {notifications.map((notification) => (
           <div
             key={notification.id}
-            className={`flex items-start gap-3 p-4 border-b border-gray-200 dark:border-gray-700/50 transition-colors cursor-pointer ${
-              notification.read
+            onClick={() => handleNotificationClick(notification)}
+            className={`flex items-start gap-3 p-4 border-b border-gray-200 dark:border-gray-700/50 transition-colors cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
+              notification.isRead
                 ? "bg-white dark:bg-gray-900"
                 : "bg-blue-50 dark:bg-blue-900/10"
             }`}
           >
-            {notification.avatar ? (
-              <div className="h-12 w-12 rounded-full overflow-hidden">
+            {/* ───── Avatar ───── */}
+            {notification.sender?.profile_img ? (
+              <div className="h-12 w-12 rounded-full overflow-hidden flex-shrink-0">
                 <img
-                  src={notification.avatar}
-                  alt={notification.title}
+                  src={`${API_BASE_URL}${notification.sender.profile_img}`}
+                  alt={notification.sender.username}
                   className="h-full w-full object-cover"
                 />
-                <div className="h-full w-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                  {notification.title.charAt(0)}
-                </div>
+              </div>
+            ) : notification.sender?.username ? (
+              <div className="h-12 w-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-semibold text-lg">
+                  {notification.sender.username.charAt(0).toUpperCase()}
+                </span>
               </div>
             ) : (
-              <div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
+              <div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
                 {getNotificationIcon(notification.type)}
               </div>
             )}
 
+            {/* ───── Content ───── */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-gray-900 dark:text-white">
+                <span className="font-medium text-gray-900 dark:text-white truncate">
                   {notification.title}
                 </span>
                 <span
-                  className={`p-1 rounded-full ${
-                    notification.type === "missed_call"
-                      ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-                      : "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                  }`}
+                  className={`p-1 rounded-full flex-shrink-0 ${getNotificationColor(notification.type)}`}
                 >
                   {getNotificationIcon(notification.type)}
                 </span>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                {notification.description}
+
+              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                {notification.body}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {notification.time} ago
+
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                {getTimeAgo(notification.createdAt)}
               </p>
             </div>
 
-            {!notification.read && (
-              <div className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-2" />
+            {/* ───── Unread Indicator ───── */}
+            {!notification.isRead && (
+              <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />
             )}
           </div>
         ))}
+
+        {/* ───── Load More Trigger ───── */}
+        {currentPage < totalPages && (
+          <div
+            ref={observerTarget}
+            className="flex items-center justify-center py-4"
+          >
+            {loading && (
+              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+            )}
+          </div>
+        )}
+
+        {/* ───── End of List ───── */}
+        {notifications.length > 0 && currentPage >= totalPages && (
+          <div className="text-center py-6 text-sm text-gray-400 dark:text-gray-500">
+            You're all caught up! 🎉
+          </div>
+        )}
       </div>
     </div>
   );

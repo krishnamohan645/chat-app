@@ -20,6 +20,16 @@ import {
   getGroupMembersThunk,
 } from "../features/groups/groupsSlice";
 import { getSocket } from "./socket";
+import { addNotificationRealtime } from "../features/notifications/notificationsSlice";
+import {
+  clearCurrentCall,
+  clearIncomingCall,
+  incrementMissedCount,
+  setCurrentCall,
+  setIncomingCall,
+} from "../features/calls/callsSlice";
+import webrtcService from "../services/webrtc.service";
+import.meta.env.VITE_API_URL;
 
 let listenersRegistered = false;
 
@@ -213,6 +223,146 @@ export const registerSocketListeners = (dispatch) => {
     if (msg.type === "system") {
       dispatch(addMessage(msg));
     }
+  });
+
+  socket.on("new-notification", (notification) => {
+    console.log("🔔 new-notification received:", notification);
+
+    // ✅ FIX: Changed addNotification to addNotificationRealtime
+    dispatch(addNotificationRealtime(notification));
+
+    // Show browser notification if permission granted
+    if ("Notification" in window && Notification.permission === "granted") {
+      const notif = new Notification(notification.title, {
+        body: notification.body,
+        icon: notification.sender?.profile_img
+          ? `${import.meta.env.VITE_API_URL}${notification.sender.profile_img}`
+          : "/logo.png",
+        tag: `notification-${notification.id}`,
+        requireInteraction: false,
+        silent: false,
+      });
+
+      // Auto-close after 5 seconds
+      setTimeout(() => notif.close(), 5000);
+    }
+  });
+
+  // ✅ INCOMING CALL
+  socket.on("call:incoming", ({ callId, callerId, type }) => {
+    console.log("📞 call:incoming received:", { callId, callerId, type });
+
+    // Get caller info from users or fetch
+    const state = store.getState();
+    const chats = state.chats.chats;
+    const chat = chats.find((c) => c.otherUserId === callerId);
+
+    dispatch(
+      setIncomingCall({
+        callId,
+        callerId,
+        type,
+        callerInfo: chat
+          ? {
+              username: chat.name,
+              profile_img: chat.profile_img,
+            }
+          : null,
+      }),
+    );
+
+    // Play ringtone (optional)
+    const audio = new Audio("/sounds/ringtone.mp3");
+    audio.loop = true;
+    audio.play().catch((e) => console.log("Audio play failed:", e));
+
+    // Store audio reference to stop later
+    window.callRingtone = audio;
+  });
+
+  socket.on("call:started", ({ callId, receiverId, type }) => {
+    console.log("📞 call:started (I'm the caller):", {
+      callId,
+      receiverId,
+      type,
+    });
+
+    // Store callId in Redux if needed
+    dispatch(setCurrentCall({ callId, receiverId, type, isCaller: true }));
+  });
+
+  // ✅ CALL ACCEPTED
+  socket.on("call:accepted", ({ callId }) => {
+    console.log("✅ call:accepted:", callId);
+
+    // Stop ringing sound
+    if (window.callRingtone) {
+      window.callRingtone.pause();
+      window.callRingtone = null;
+    }
+
+    // Handle in call component (it will use WebRTC)
+  });
+
+  // ✅ CALL REJECTED
+  socket.on("call:rejected", ({ callId }) => {
+    console.log("❌ call:rejected:", callId);
+
+    // Stop ringing sound
+    if (window.callRingtone) {
+      window.callRingtone.pause();
+      window.callRingtone = null;
+    }
+
+    dispatch(clearIncomingCall());
+    dispatch(clearCurrentCall());
+
+    alert("Call was rejected");
+  });
+
+  // ✅ CALL MISSED
+  socket.on("call:missed", ({ callId }) => {
+    console.log("📵 call:missed:", callId);
+
+    dispatch(incrementMissedCount());
+    dispatch(clearCurrentCall());
+
+    alert("Call was not answered");
+  });
+
+  // ✅ CALL ENDED
+
+  socket.on("call:ended", ({ callId }) => {
+    console.log("📴 call:ended received:", callId);
+
+    // ✅ Stop ringtone
+    if (window.callRingtone) {
+      window.callRingtone.pause();
+      window.callRingtone = null;
+    }
+
+    // ✅ DESTROY WEBRTC
+    webrtcService.destroy();
+
+    // ✅ Clear redux
+    dispatch(clearIncomingCall());
+    dispatch(clearCurrentCall());
+
+    // ✅ Force leave call screen
+    window.location.href = "/chats";
+    // or use navigate if accessible
+  });
+  // ✅ CALL UNAVAILABLE
+  socket.on("call:unavailable", ({ reason }) => {
+    console.log("⚠️ call:unavailable:", reason);
+
+    const messages = {
+      USER_OFFLINE: "User is offline",
+      INVALID_TYPE: "Invalid call type",
+    };
+
+    alert(messages[reason] || "Cannot start call");
+    dispatch(clearCurrentCall());
   });
 
   // Verify listeners are attached

@@ -6,6 +6,7 @@ import AuthWatcher from "./AuthWatcher";
 import AppRoutes from "./routes/AppRoutes";
 import { setMyUserId } from "./features/chats/chatSlice";
 import { fetchBlockedUsersThunk } from "./features/user/userSlice";
+import IncomingCallModal from "./components/IncomingCallModal";
 
 const App = () => {
   const dispatch = useDispatch();
@@ -25,6 +26,15 @@ const App = () => {
       dispatch(fetchBlockedUsersThunk());
     }
   }, [isAuthenticated, user?.id, dispatch]);
+
+  useEffect(() => {
+    // Request notification permission on app load
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().then((permission) => {
+        console.log("🔔 Notification permission:", permission);
+      });
+    }
+  }, []);
 
   //  Show loading screen until auth check completes
   if (authLoading) {
@@ -53,6 +63,7 @@ const App = () => {
 
   return (
     <>
+      <IncomingCallModal />
       <ToastContainer />
       <AuthWatcher />
       <AppRoutes />

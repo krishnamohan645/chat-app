@@ -522,6 +522,26 @@ const Chat = () => {
     }
   };
 
+  const handleStartCall = (receiverId, type, navigate, socket) => {
+    if (!socket) {
+      alert("Connection error. Please refresh.");
+      return;
+    }
+
+    // ✅ Listen for call:started event (one-time listener)
+    socket.once("call:started", ({ callId }) => {
+      console.log("📞 Call started with ID:", callId);
+
+      // Navigate with callId
+      navigate(
+        `/call/${type}?callId=${callId}&receiverId=${receiverId}&status=calling`,
+      );
+    });
+
+    // Emit call:start to backend
+    socket.emit("call:start", { receiverId, type });
+  };
+  
   if (!activeChat) return null;
 
   return (
@@ -577,10 +597,32 @@ const Chat = () => {
         </div>
 
         <div className="flex items-center gap-1">
-          <button className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+          <button
+            onClick={() =>
+              handleStartCall(
+                activeChat.otherUserId,
+                "audio",
+                navigate,
+                getSocket(),
+              )
+            }
+            disabled={isChatBlocked}
+            className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+          >
             <Phone className="h-5 w-5" />
           </button>
-          <button className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+          <button
+            onClick={() =>
+              handleStartCall(
+                activeChat.otherUserId,
+                "video",
+                navigate,
+                getSocket(),
+              )
+            }
+            disabled={isChatBlocked}
+            className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+          >
             <Video className="h-5 w-5" />
           </button>
 

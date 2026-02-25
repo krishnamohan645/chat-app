@@ -54,7 +54,14 @@ const Notification = sequelize.define(
       defaultValue: false,
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    indexes: [
+      { fields: ["userId"] },
+      { fields: ["isRead"] },
+      { fields: ["chatId"] },
+    ],
+  },
 );
 
 module.exports = Notification;

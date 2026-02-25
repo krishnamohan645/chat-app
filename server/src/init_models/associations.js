@@ -74,8 +74,15 @@ module.exports = ({
   Notification.belongsTo(Users, { foreignKey: "senderId" });
 
   // Notifications → Chats
-  Chats.hasMany(Notification, { foreignKey: "chatId" });
-  Notification.belongsTo(Chats, { foreignKey: "chatId" });
+  Users.hasMany(Notification, {
+    foreignKey: "senderId",
+    as: "sentNotifications",
+  });
+
+  Notification.belongsTo(Users, {
+    foreignKey: "senderId",
+    as: "sender",
+  }); 
 
   // Blocked Users (self join)
   BlockedUser.belongsTo(Users, { foreignKey: "blockedId", as: "blockedUser" });

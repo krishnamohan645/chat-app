@@ -677,12 +677,12 @@ const GroupChat = () => {
           >
             <Users className="h-5 w-5" />
           </button>
-          <button className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+          {/* <button className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
             <Phone className="h-5 w-5" />
           </button>
           <button className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
             <Video className="h-5 w-5" />
-          </button>
+          </button> */}
           <div className="relative dropdown-container">
             <button
               className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"

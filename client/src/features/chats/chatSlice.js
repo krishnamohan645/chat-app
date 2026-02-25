@@ -33,7 +33,7 @@ export const getChatList = createAsyncThunk(
     try {
       const res = await getChatListAPI();
       console.log(res.data.chats, "chats in redux chat list");
-      return res.data.chats;
+      return res.data.chats.filter((chat) => chat.type === "private");
     } catch (err) {
       return rejectWithValue(err.response.data.message);
     }
