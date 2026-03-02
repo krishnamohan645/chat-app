@@ -28,6 +28,10 @@ const Chats = sequelize.define("chats", {
     type: DataTypes.INTEGER, //userid
     allowNull: false,
   },
+  cloudinaryId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 });
 
 module.exports = Chats;

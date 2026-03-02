@@ -5,9 +5,7 @@ const registerController = async (req, res, next) => {
   try {
     await authService.registerUser({
       ...req.body,
-      profileImg: req.file
-        ? `/uploads/images/${req.file.filename}` // ✅ RELATIVE PATH
-        : null,
+      profileImg: req.file || null,
     });
     res.status(201).json({
       message: "Signup Successful. please verify OTP",

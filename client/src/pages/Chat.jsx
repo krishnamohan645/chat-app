@@ -541,7 +541,7 @@ const Chat = () => {
     // Emit call:start to backend
     socket.emit("call:start", { receiverId, type });
   };
-  
+
   if (!activeChat) return null;
 
   return (
@@ -558,7 +558,8 @@ const Chat = () => {
           <div className="relative h-10 w-10">
             {activeChat.profile_img ? (
               <img
-                src={`${API_BASE_URL}${activeChat.profile_img}`}
+                // src={`${API_BASE_URL}${activeChat.profile_img}`}
+                src={activeChat.profile_img}
                 alt={activeChat.name}
                 className="h-full w-full rounded-full object-cover"
               />
@@ -568,6 +569,10 @@ const Chat = () => {
                   {activeChat.name?.charAt(0).toUpperCase()}
                 </span>
               </div>
+            )}
+            {/* ✅ Online Green Dot */}
+            {activeChat.isOnline && (
+              <span className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></span>
             )}
           </div>
 
@@ -800,11 +805,13 @@ const Chat = () => {
                   {/* Image */}
                   {msg.type === "image" && msg.fileUrl && (
                     <img
-                      src={`${API_BASE_URL}${msg.fileUrl}`}
+                      // src={`${API_BASE_URL}${msg.fileUrl}`}
+                      src={msg.fileUrl}
                       alt={msg.fileName || "uploaded image"}
                       className="max-w-full max-h-96 rounded-lg cursor-pointer"
                       onClick={() =>
-                        window.open(`${API_BASE_URL}${msg.fileUrl}`, "_blank")
+                        // window.open(`${API_BASE_URL}${msg.fileUrl}`, "_blank")
+                        window.open(msg.fileUrl, "_blank")
                       }
                       onError={(e) => {
                         console.error("Failed to load image:", msg.fileUrl);
@@ -823,7 +830,8 @@ const Chat = () => {
                       }}
                     >
                       <source
-                        src={`${API_BASE_URL}${msg.fileUrl}`}
+                        // src={`${API_BASE_URL}${msg.fileUrl}`}
+                        src={msg.fileUrl}
                         type={msg.mimeType}
                       />
                       Your browser does not support the video tag.
@@ -836,7 +844,8 @@ const Chat = () => {
                       <span className="text-2xl">🎵</span>
                       <audio controls className="flex-1">
                         <source
-                          src={`${API_BASE_URL}${msg.fileUrl}`}
+                          // src={`${API_BASE_URL}${msg.fileUrl}`}
+                          src={msg.fileUrl}
                           type={msg.mimeType}
                         />
                         Your browser does not support the audio tag.
@@ -848,7 +857,8 @@ const Chat = () => {
                   {(msg.type === "document" || msg.type === "file") &&
                     msg.fileUrl && (
                       <a
-                        href={`${API_BASE_URL}${msg.fileUrl}`}
+                        // href={`${API_BASE_URL}${msg.fileUrl}`}
+                        href={msg.fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`flex items-center gap-2 p-3 rounded-lg hover:opacity-80 transition-opacity ${

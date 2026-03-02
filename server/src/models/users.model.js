@@ -76,6 +76,10 @@ const Users = sequelize.define("users", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  cloudinaryId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 });
 
 module.exports = Users;

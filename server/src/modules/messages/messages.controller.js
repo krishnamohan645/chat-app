@@ -1,44 +1,59 @@
 const messageService = require("./messages.service");
 
+/**
+ * Send a text message
+ * Controller passes PLAIN TEXT to service
+ * Service handles encryption
+ */
 const sendMessage = async (req, res, next) => {
   try {
+    // ✅ Pass plain text - service will encrypt it
     const msg = await messageService.sendMessage(
       req.params.chatId,
       req.user.id,
-      req.body.content,
+      req.body.content, // Plain text
     );
+
     res.status(201).json(msg);
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * Get messages for a chat
+ * Service returns decrypted messages
+ */
 const getMessages = async (req, res, next) => {
-  console.log("userrrrrrr", req.user.id, "chatttttttt", req.params.chatId);
-
   try {
     const { limit = 20, offset = 0 } = req.query;
+
     const msgs = await messageService.getMessages(
       req.params.chatId,
       req.user.id,
       parseInt(limit),
       parseInt(offset),
     );
+
     res.json(msgs);
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * Edit a message
+ */
 const editMessage = async (req, res, next) => {
   try {
     if (!req.body?.content) {
       return res.status(400).json({ message: "Content required" });
     }
+
     await messageService.editMessage(
       req.params.messageId,
       req.user.id,
-      req.body.content,
+      req.body.content, // Plain text
     );
 
     res.json({ message: "Message Updated" });
@@ -47,6 +62,9 @@ const editMessage = async (req, res, next) => {
   }
 };
 
+/**
+ * Delete message for everyone
+ */
 const deleteMessageForEveryone = async (req, res, next) => {
   try {
     await messageService.deleteMessageForEveryone(
@@ -59,6 +77,9 @@ const deleteMessageForEveryone = async (req, res, next) => {
   }
 };
 
+/**
+ * Delete message for me only
+ */
 const deleteMessageForMe = async (req, res, next) => {
   try {
     await messageService.deleteMessageForMe(req.params.messageId, req.user.id);
@@ -68,6 +89,9 @@ const deleteMessageForMe = async (req, res, next) => {
   }
 };
 
+/**
+ * Mark message as read
+ */
 const readMessage = async (req, res, next) => {
   try {
     await messageService.readMessage(req.params.messageId, req.user.id);
@@ -77,6 +101,9 @@ const readMessage = async (req, res, next) => {
   }
 };
 
+/**
+ * Mark all messages in chat as read
+ */
 const readAllMessages = async (req, res, next) => {
   try {
     await messageService.readAllMessages(req.params.chatId, req.user.id);
@@ -86,10 +113,13 @@ const readAllMessages = async (req, res, next) => {
   }
 };
 
+/**
+ * Send file message
+ */
 const sendFileMessage = async (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) {
-      throw new Error("Atleast one file is required");
+      throw new Error("At least one file is required");
     }
 
     let messages = [];
@@ -108,6 +138,10 @@ const sendFileMessage = async (req, res, next) => {
   }
 };
 
+/**
+ * Search messages in a chat
+ * Service handles decryption and searching
+ */
 const searchMessages = async (req, res, next) => {
   try {
     const msgs = await messageService.searchMessages(
@@ -121,17 +155,24 @@ const searchMessages = async (req, res, next) => {
   }
 };
 
-const sendSticker = async (req, res) => {
-  const { chatId } = req.params;
-  const { stickerUrl } = req.body; // this is emoji
+/**
+ * Send sticker message
+ */
+const sendSticker = async (req, res, next) => {
+  try {
+    const { chatId } = req.params;
+    const { stickerUrl } = req.body; // Emoji
 
-  const msg = await messageService.sendStickerMessage(
-    chatId,
-    req.user.id,
-    stickerUrl,
-  );
+    const msg = await messageService.sendStickerMessage(
+      chatId,
+      req.user.id,
+      stickerUrl,
+    );
 
-  res.status(201).json(msg);
+    res.status(201).json(msg);
+  } catch (err) {
+    next(err);
+  }
 };
 
 module.exports = {

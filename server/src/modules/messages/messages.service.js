@@ -11,6 +11,7 @@ const { notifyOnNewMessage } = require("../../notification/notificationHook");
 const { getIO, isUserOnline } = require("../../socket/socket");
 const { isMember, isMemberOrWasMember } = require("../chats/chat.service");
 const { deleteFileIfExists } = require("../../utils/file.util");
+const { decrypt, encrypt } = require("../../utils/crypto.util");
 
 const getprivateChat = async (chatId, senderId) => {
   const members = await GroupMembers.findAll({
@@ -50,7 +51,7 @@ const sendMessage = async (chatId, userId, content) => {
   const msg = await Messages.create({
     chatId,
     senderId: userId,
-    content,
+    content: encrypt(content),
     type: "text",
   });
 
@@ -89,7 +90,19 @@ const sendMessage = async (chatId, userId, content) => {
   );
 
   // realtime chat message
-  getIO().to(`chat-${chatId}`).emit("new-message", msg);
+  getIO().to(`chat-${chatId}`).emit("new-message", {
+    id: msg.id,
+    chatId: msg.chatId,
+    senderId: msg.senderId,
+    content: content, // ✅ Plain text (original parameter)
+    type: msg.type,
+    createdAt: msg.createdAt,
+    isEdited: msg.isEdited,
+    fileUrl: msg.fileUrl,
+    fileName: msg.fileName,
+    fileSize: msg.fileSize,
+    mimeType: msg.mimeType,
+  });
   console.log("🔥 emitting chat-list:update");
 
   const deliveredToSomeone = members.some((m) => isUserOnline(m.userId));
@@ -118,6 +131,9 @@ const sendMessage = async (chatId, userId, content) => {
     attributes: ["username"],
   });
 
+  const decryptedContent =
+    msg.type === "text" && msg.content ? decrypt(msg.content) : null;
+
   chatMembers.forEach((member) => {
     getIO()
       .to(`user-${member.userId}`)
@@ -128,7 +144,7 @@ const sendMessage = async (chatId, userId, content) => {
         lastMessage: {
           text:
             msg.type === "text"
-              ? msg.content
+              ? decryptedContent
               : msg.type === "image"
                 ? "📷 Photo"
                 : msg.type === "video"
@@ -284,7 +300,8 @@ const getMessages = async (chatId, userId, limit, offset) => {
       id: m.id,
       chatId: m.chatId,
       senderId: m.senderId,
-      content: m.content,
+      // content: m.content,
+      content: m.content ? decrypt(m.content) : null,
       type: m.type,
       createdAt: m.createdAt,
       status,
@@ -306,7 +323,7 @@ const editMessage = async (messageId, userId, content) => {
   }
 
   await msg.update({
-    content,
+    content: encrypt(content),
     isEdited: true,
   });
 
@@ -325,8 +342,19 @@ const deleteMessageForEveryone = async (messageId, userId) => {
     throw new Error("Not allowed");
   }
 
-  if (msg.fileUrl) {
-    deleteFileIfExists(msg.fileUrl);
+  // ✅ Delete from Cloudinary
+  if (msg.cloudinaryId) {
+    try {
+      let resourceType = "raw";
+      if (msg.type === "image") resourceType = "image";
+      else if (msg.type === "video" || msg.type === "audio")
+        resourceType = "video";
+
+      await deleteFile(msg.cloudinaryId, resourceType);
+      console.log("✅ Deleted from Cloudinary");
+    } catch (error) {
+      console.error("Failed to delete from Cloudinary:", error);
+    }
   }
 
   await msg.update({
@@ -425,11 +453,15 @@ const sendFileMessage = async (chatId, userId, file) => {
     type = "document";
   }
 
-  // ✅ Extract relative path
-  let relativeFileUrl = file.path.replace(/\\/g, "/");
-  const uploadsIndex = relativeFileUrl.indexOf("uploads");
-  if (uploadsIndex !== -1) {
-    relativeFileUrl = "/" + relativeFileUrl.substring(uploadsIndex);
+  // ✅ Upload to Cloudinary
+  let uploaded;
+  try {
+    console.log("📤 Uploading chat file...");
+    uploaded = await uploadChatFile(file);
+    console.log("✅ Uploaded:", uploaded.fileUrl);
+  } catch (error) {
+    console.error("Failed to upload file:", error);
+    throw new Error("Failed to upload file to cloud storage");
   }
 
   const msg = await Messages.create({
@@ -437,10 +469,11 @@ const sendFileMessage = async (chatId, userId, file) => {
     senderId: userId,
     type,
     content: null,
-    fileUrl: relativeFileUrl,
-    fileName: file.originalname,
-    fileSize: file.size,
-    mimeType: file.mimetype,
+    fileUrl: uploaded.fileUrl, // ✅ Cloudinary URL
+    fileName: uploaded.fileName,
+    fileSize: uploaded.fileSize,
+    mimeType: uploaded.mimeType,
+    cloudinaryId: uploaded.cloudinaryId, // ✅ For deletion
   });
 
   // ✅ CREATE MESSAGE STATUS
@@ -464,7 +497,19 @@ const sendFileMessage = async (chatId, userId, file) => {
   await Chats.update({ updatedAt: new Date() }, { where: { id: chatId } });
 
   // ✅ EMIT NEW MESSAGE
-  getIO().to(`chat-${chatId}`).emit("new-message", msg);
+  getIO().to(`chat-${chatId}`).emit("new-message", {
+    id: msg.id,
+    chatId: msg.chatId,
+    senderId: msg.senderId,
+    content: msg.content,
+    type: msg.type,
+    createdAt: msg.createdAt,
+    isEdited: msg.isEdited,
+    fileUrl: msg.fileUrl,
+    fileName: msg.fileName,
+    fileSize: msg.fileSize,
+    mimeType: msg.mimeType,
+  });
 
   // ✅ CHECK IF DELIVERED TO SOMEONE ONLINE (THIS WAS MISSING!)
   const deliveredToSomeone = members.some((m) => isUserOnline(m.userId));
@@ -523,17 +568,55 @@ const sendFileMessage = async (chatId, userId, file) => {
 const searchMessages = async (chatId, userId, search) => {
   await isMember(chatId, userId);
 
-  return Messages.findAll({
+  if (!search || search.trim() === "") {
+    return [];
+  }
+
+  console.log(`🔍 Searching for "${search}" in chat ${chatId}`);
+
+  // ✅ Fetch ALL text messages (they're encrypted in DB)
+  const messages = await Messages.findAll({
     where: {
       chatId,
       type: "text",
-      content: {
-        [Op.iLike]: `%${search}%`,
-      },
     },
     order: [["createdAt", "DESC"]],
-    limit: 50,
+    limit: 500, // Reasonable limit
+    raw: true,
   });
+
+  console.log(`📦 Found ${messages.length} text messages to search`);
+
+  // ✅ Decrypt and filter in memory
+  const searchLower = search.toLowerCase();
+
+  const matchingMessages = messages
+    .map((msg) => {
+      try {
+        // Decrypt the message content
+        const decryptedContent = msg.content ? decrypt(msg.content) : "";
+
+        return {
+          ...msg,
+          content: decryptedContent,
+        };
+      } catch (error) {
+        console.error(`❌ Failed to decrypt message ${msg.id}:`, error);
+        return null;
+      }
+    })
+    .filter((msg) => {
+      // Remove null (failed decryptions)
+      if (!msg) return false;
+
+      // Check if decrypted content includes search term
+      return msg.content.toLowerCase().includes(searchLower);
+    })
+    .slice(0, 50); // Return max 50 results
+
+  console.log(`✅ Found ${matchingMessages.length} matching messages`);
+
+  return matchingMessages;
 };
 
 const sendStickerMessage = async (chatId, userId, emoji) => {
@@ -569,7 +652,19 @@ const sendStickerMessage = async (chatId, userId, emoji) => {
   await Chats.update({ updatedAt: new Date() }, { where: { id: chatId } });
 
   // ✅ EMIT NEW MESSAGE
-  getIO().to(`chat-${chatId}`).emit("new-message", msg);
+  getIO().to(`chat-${chatId}`).emit("new-message", {
+    id: msg.id,
+    chatId: msg.chatId,
+    senderId: msg.senderId,
+    content: emoji, // ✅ Original emoji
+    type: msg.type,
+    createdAt: msg.createdAt,
+    isEdited: false,
+    fileUrl: null,
+    fileName: null,
+    fileSize: null,
+    mimeType: null,
+  });
 
   // ✅ CHECK IF DELIVERED TO SOMEONE ONLINE
   const deliveredToSomeone = members.some((m) => isUserOnline(m.userId));

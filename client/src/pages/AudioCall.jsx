@@ -13,7 +13,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { getSocket } from "../socket/socket";
 import webrtcService from "../services/webrtc.service";
 import {
-  setCurrentCall,
   clearCurrentCall,
   toggleMute,
   setCallStatus,
@@ -30,10 +29,7 @@ const AudioCall = () => {
   const callId = searchParams.get("callId");
   const status = searchParams.get("status"); // 'calling' or 'connected'
 
-  const { currentCall, callStatus, isMuted } = useSelector(
-    (state) => state.calls,
-  );
-  const currentUser = useSelector((state) => state.user.user);
+  const { callStatus, isMuted } = useSelector((state) => state.calls);
   const chats = useSelector((state) => state.chats.chats);
 
   const [duration, setDuration] = useState(0);
@@ -96,12 +92,10 @@ const AudioCall = () => {
             stream,
             signal,
             (answerSignal) => {
-
               socket.emit("webrtc:answer", {
                 callId,
                 signal: answerSignal,
               });
-
             },
             (remoteStream) => {
               console.log("📹 Remote stream received (receiver)");
@@ -117,7 +111,6 @@ const AudioCall = () => {
               endCall();
             },
           );
-
         } catch (error) {
           console.error("❌ Failed to create answer:", error);
           console.error("Error stack:", error.stack);
@@ -127,7 +120,6 @@ const AudioCall = () => {
 
       // ALWAYS listen for answer
       socket.on("webrtc:answer", ({ signal }) => {
-
         setTimeout(() => {
           webrtcService.acceptSignal(signal);
         }, 0);
@@ -138,7 +130,6 @@ const AudioCall = () => {
 
       // IF THIS USER STARTED THE CALL → create offer
       if (status === "calling") {
-
         webrtcService.createPeer(
           stream,
           (signal) => {
@@ -149,7 +140,6 @@ const AudioCall = () => {
             });
           },
           (remoteStream) => {
-
             if (remoteAudioRef.current) {
               remoteAudioRef.current.srcObject = remoteStream;
               remoteAudioRef.current.play().catch(() => {});
@@ -204,7 +194,8 @@ const AudioCall = () => {
         <div className="h-32 w-32 mx-auto mb-6 rounded-full">
           {otherUser?.profile_img ? (
             <img
-              src={`${API_BASE_URL}${otherUser.profile_img}`}
+              // src={`${API_BASE_URL}${otherUser.profile_img}`}
+              src={otherUser.profile_img}
               alt={otherUser.name}
               className="h-full w-full rounded-full object-cover"
             />

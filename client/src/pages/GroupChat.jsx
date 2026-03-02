@@ -32,12 +32,10 @@ import {
   getAllGroupMembersThunk,
   leaveGroupThunk,
   removeGroupMemberThunk,
-  updateGroupMemberCount,
 } from "../features/groups/groupsSlice";
 import {
   getMessages,
   sendMessageThunk,
-  addMessage,
   searchMessages,
   deleteMessageForEveryoneThunk,
   deleteMessageForMeThunk,
@@ -101,14 +99,6 @@ const GroupChat = () => {
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
 
-  // Check if current user has left the group
-  const currentMembership = members.find(
-    (m) => Number(m.userId) === Number(currentUser?.id),
-  );
-
-  const hasLeftGroup =
-    currentMembership?.leftAt !== null &&
-    currentMembership?.leftAt !== undefined;
 
   // File validation constants
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
@@ -637,7 +627,8 @@ const GroupChat = () => {
           <div className="h-10 w-10 rounded-full overflow-hidden bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-semibold">
             {group.profile_img ? (
               <img
-                src={`${API_BASE_URL}${group.profile_img}`}
+                // src={`${API_BASE_URL}${group.profile_img}`}
+                src={group.profile_img}
                 alt={group.name}
                 className="h-full w-full object-cover rounded-full"
               />
@@ -789,7 +780,8 @@ const GroupChat = () => {
                             <div className="h-10 w-10 rounded-full overflow-hidden bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-sm font-semibold text-gray-700 dark:text-gray-200 flex-shrink-0">
                               {member.user?.profile_img ? (
                                 <img
-                                  src={`${API_BASE_URL}${member.user.profile_img}`}
+                                  // src={`${API_BASE_URL}${member.user.profile_img}`}
+                                  src={member.user.profile_img}
                                   alt={member.user?.username}
                                   className="h-full w-full object-cover rounded-full"
                                 />
@@ -854,7 +846,8 @@ const GroupChat = () => {
                         <div className="h-10 w-10 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-sm font-semibold text-gray-500 dark:text-gray-400 flex-shrink-0">
                           {member.user?.profile_img ? (
                             <img
-                              src={`${API_BASE_URL}${member.user.profile_img}`}
+                              // src={`${API_BASE_URL}${member.user.profile_img}`}
+                              src={member.user.profile_img}
                               alt={member.user?.username}
                               className="h-full w-full object-cover rounded-full grayscale"
                             />
@@ -941,7 +934,8 @@ const GroupChat = () => {
                 <div className="h-8 w-8 rounded-full overflow-hidden flex-shrink-0 bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-xs font-semibold text-gray-700 dark:text-gray-200">
                   {senderImg ? (
                     <img
-                      src={`${API_BASE_URL}${senderImg}`}
+                      // src={`${API_BASE_URL}${senderImg}`}
+                      src={senderImg}
                       alt={senderName}
                       className="h-full w-full object-cover"
                     />
@@ -993,11 +987,13 @@ const GroupChat = () => {
                   {/* Image */}
                   {msg.type === "image" && msg.fileUrl && (
                     <img
-                      src={`${API_BASE_URL}${msg.fileUrl}`}
+                      // src={`${API_BASE_URL}${msg.fileUrl}`}
+                      src={msg.fileUrl}
                       alt={msg.fileName || "uploaded image"}
                       className="max-w-full max-h-96 rounded-lg cursor-pointer"
                       onClick={() =>
-                        window.open(`${API_BASE_URL}${msg.fileUrl}`, "_blank")
+                        // window.open(`${API_BASE_URL}${msg.fileUrl}`, "_blank")
+                        window.open(msg.fileUrl, "_blank")
                       }
                     />
                   )}
@@ -1006,7 +1002,8 @@ const GroupChat = () => {
                   {msg.type === "video" && msg.fileUrl && (
                     <video controls className="max-w-full max-h-96 rounded-lg">
                       <source
-                        src={`${API_BASE_URL}${msg.fileUrl}`}
+                        // src={`${API_BASE_URL}${msg.fileUrl}`}
+                        src={msg.fileUrl}
                         type={msg.mimeType}
                       />
                     </video>
@@ -1018,7 +1015,8 @@ const GroupChat = () => {
                       <span className="text-2xl">🎵</span>
                       <audio controls className="flex-1">
                         <source
-                          src={`${API_BASE_URL}${msg.fileUrl}`}
+                          // src={`${API_BASE_URL}${msg.fileUrl}`}
+                          src={msg.fileUrl}
                           type={msg.mimeType}
                         />
                       </audio>
@@ -1029,7 +1027,8 @@ const GroupChat = () => {
                   {(msg.type === "document" || msg.type === "file") &&
                     msg.fileUrl && (
                       <a
-                        href={`${API_BASE_URL}${msg.fileUrl}`}
+                        // href={`${API_BASE_URL}${msg.fileUrl}`}
+                        href={msg.fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`flex items-center gap-2 p-3 rounded-lg hover:opacity-80`}

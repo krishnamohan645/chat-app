@@ -1,6 +1,7 @@
 const { Op } = require("sequelize");
 const { Users, BlockedUser, Devices } = require("../../models");
 const bcrypt = require("bcryptjs");
+const { deleteFile, uploadProfileImage } = require("../../utils/cloudinaryUpload");
 
 const getMyProfile = async (userId) => {
   const user = await Users.findByPk(userId, {
@@ -14,18 +15,49 @@ const getMyProfile = async (userId) => {
 const updateProfile = async (userId, data) => {
   const { username, bio, profile_img } = data;
 
+  const user = await Users.findByPk(userId);
+  if (!user) throw new Error("User not found");
+
+  // ✅ Handle profile image upload
+  let newProfileImg = profile_img;
+  let newCloudinaryId = user.cloudinaryId;
+
+  // Check if profile_img is a file object (from multer)
+  if (profile_img && typeof profile_img === "object" && profile_img.path) {
+    try {
+      console.log("📤 Updating profile image...");
+
+      // Delete old image from Cloudinary if exists
+      if (user.cloudinaryId) {
+        console.log("🗑️ Deleting old profile image...");
+        await deleteFile(user.cloudinaryId, "image");
+      }
+
+      // Upload new image
+      const uploaded = await uploadProfileImage(profile_img);
+      newProfileImg = uploaded.fileUrl;
+      newCloudinaryId = uploaded.cloudinaryId;
+
+      console.log("✅ New profile uploaded:", uploaded.fileUrl);
+    } catch (error) {
+      console.error("Failed to upload profile:", error);
+      throw new Error("Failed to upload profile image");
+    }
+  }
+
+  // Update user
   await Users.update(
     {
       username,
       bio,
-      profile_img,
+      profile_img: newProfileImg,
+      cloudinaryId: newCloudinaryId,
     },
     {
-      where: {
-        id: userId,
-      },
+      where: { id: userId },
     },
   );
+
   return await Users.findByPk(userId, {
     attributes: { exclude: ["password"] },
   });

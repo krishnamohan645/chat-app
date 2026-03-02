@@ -3,6 +3,7 @@ const { Devices, Users, MessageStatus, Messages, Call } = require("../models");
 const { sendPushToUser } = require("../services/push.service");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
+const { redisClient } = require("../config/redis");
 
 let io;
 
@@ -56,6 +57,8 @@ const initSocket = (server) => {
     socket.onAny((event, data) => {
       console.log("SOCKET EVENT:", event, data);
     });
+    await redisClient.set(`online:${socket.userId}`, "1");
+    console.log("User set online in Redis:", socket.userId);
 
     socket.join(`user-${socket.userId}`);
     console.log(`👤 User ${socket.userId} joined their user room`);
@@ -167,6 +170,7 @@ const initSocket = (server) => {
     // ONLINE LOGIC (FIXED)
     const count = (onlineUsers.get(socket.userId) || 0) + 1;
     onlineUsers.set(socket.userId, count);
+    await redisClient.set(`online:${socket.userId}`, "1");
 
     if (count === 1) {
       await Users.update({ isOnline: true }, { where: { id: socket.userId } });
@@ -590,7 +594,8 @@ const initSocket = (server) => {
 
       if (current <= 0) {
         onlineUsers.delete(socket.userId);
-
+        await redisClient.del(`online:${socket.userId}`);
+        console.log("User removed from Redis:", socket.userId);
         await Users.update(
           {
             isOnline: false,

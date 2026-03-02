@@ -43,7 +43,8 @@ const EditProfile = () => {
       setUsername(user.username || "");
       setBio(user.bio || "");
       setPreview(
-        user.profile_img ? `${API_BASE_URL}${user.profile_img}` : null,
+        // user.profile_img ? `${API_BASE_URL}${user.profile_img}` : null,
+        user.profile_img ? user.profile_img : null,
       );
     }
   }, [user]);

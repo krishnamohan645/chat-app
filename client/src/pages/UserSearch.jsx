@@ -94,7 +94,8 @@ const UserSearch = () => {
                 <div className="h-12 w-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                   {user.profile_img ? (
                     <img
-                      src={`${API_BASE_URL}${user.profile_img}`}
+                      // src={`${API_BASE_URL}${user.profile_img}`}
+                      src={user.profile_img}
                       alt={user.username}
                       className="h-full w-full object-cover"
                     />

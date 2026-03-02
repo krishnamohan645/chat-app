@@ -9,6 +9,7 @@ const {
 } = require("../../models");
 const { notifyGroupEvent } = require("../../notification/notificationHook");
 const { getIO } = require("../../socket/socket");
+const { decrypt } = require("../../utils/crypto.util");
 
 // Helpers
 
@@ -131,13 +132,21 @@ const createGroupChat = async (
   if (!Array.isArray(members)) throw new Error("Members must be an array");
 
   let groupImage = null;
-  if (file) groupImage = "/uploads/images/" + file.filename;
+  let cloudinaryId = null;
+  // if (file) groupImage = "/uploads/images/" + file.filename;
+
+  if (file) {
+    const uploaded = await uploadGroupImage(file);
+    groupImage = uploaded.fileUrl;
+    cloudinaryId = uploaded.cloudinaryId;
+  }
 
   const chat = await Chats.create({
     type: "group",
     name,
     description,
     groupImage,
+    cloudinaryId,
     createdBy: createdId,
   });
 
@@ -596,10 +605,21 @@ const getChatList = async (userId) => {
     }
 
     let previewText = null;
+
     if (lastMessage) {
+      let decryptedContent = null;
+
+      if (lastMessage.type === "text" && lastMessage.content) {
+        try {
+          decryptedContent = decrypt(lastMessage.content);
+        } catch {
+          decryptedContent = lastMessage.content;
+        }
+      }
+
       previewText =
         lastMessage.type === "text"
-          ? lastMessage.content
+          ? decryptedContent || ""
           : lastMessage.type === "image"
             ? "📷 Photo"
             : lastMessage.type === "video"
@@ -608,11 +628,10 @@ const getChatList = async (userId) => {
                 ? "🎵 Audio"
                 : lastMessage.type === "document"
                   ? "📄 Document"
-                  : lastMessage.type === "file"
-                    ? "📎 File"
-                    : lastMessage.content;
+                  : lastMessage.type === "sticker"
+                    ? "🎭 Sticker"
+                    : "📎 File";
     }
-
     results.push({
       chatId: chat.id,
       type: chat.type,

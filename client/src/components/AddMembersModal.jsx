@@ -151,7 +151,8 @@ const AddMembersModal = ({ chatId, currentMembers = [], onClose }) => {
                     <div className="h-10 w-10 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-300">
                       {user.profile_img ? (
                         <img
-                          src={`${API_BASE_URL}${user.profile_img}`}
+                          // src={`${API_BASE_URL}${user.profile_img}`}
+                          src={user.profile_img}
                           alt={user.username}
                           className="h-full w-full object-cover"
                         />

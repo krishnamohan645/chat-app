@@ -128,7 +128,8 @@ const Groups = () => {
                 <div className="h-12 w-12 rounded-full overflow-hidden bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-semibold">
                   {group.profile_img ? (
                     <img
-                      src={`${API_BASE_URL}${group.profile_img}`}
+                      // src={`${API_BASE_URL}${group.profile_img}`}
+                      src={group.profile_img}
                       alt={group.name}
                       className="h-full w-full object-cover"
                     />

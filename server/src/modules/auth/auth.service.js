@@ -11,6 +11,7 @@ const jwt = require("jsonwebtoken");
 
 const crypto = require("crypto");
 const sequelize = require("../../config/database");
+const { uploadProfileImage } = require("../../utils/cloudinaryUpload");
 
 const hashToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
@@ -37,6 +38,22 @@ const registerUser = async ({ username, identifier, password, profileImg }) => {
 
   const t = await sequelize.transaction();
   try {
+    let profile_img = null;
+    let cloudinaryId = null;
+
+    if (profileImg) {
+      try {
+        console.log("📤 Uploading signup profile image...");
+        const uploaded = await uploadProfileImage(profileImg);
+        profile_img = uploaded.fileUrl; // Cloudinary URL
+        cloudinaryId = uploaded.cloudinaryId; // For deletion
+        console.log("✅ Profile uploaded:", profile_img);
+      } catch (error) {
+        console.error("Failed to upload profile:", error);
+        throw new Error("Failed to upload profile image");
+      }
+    }
+
     // 1️⃣ Create user
     const user = await Users.create(
       {
@@ -47,7 +64,8 @@ const registerUser = async ({ username, identifier, password, profileImg }) => {
         loginType: isEmail ? "email" : "mobile",
         isVerified: false,
         isActive: true,
-        profile_img: profileImg,
+        profile_img,
+        cloudinaryId,
       },
       { transaction: t },
     );

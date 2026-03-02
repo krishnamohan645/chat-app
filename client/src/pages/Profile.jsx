@@ -66,7 +66,8 @@ const Profile = () => {
             <div className="h-28 w-28 rounded-full overflow-hidden ring-4 ring-white dark:ring-gray-900 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
               {profile_img ? (
                 <img
-                  src={`${API_BASE_URL}${profile_img}`}
+                  // src={`${API_BASE_URL}${profile_img}`}
+                  src={profile_img}
                   alt={username}
                   className="h-full w-full object-cover"
                 />

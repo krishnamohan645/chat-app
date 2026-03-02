@@ -207,7 +207,8 @@ const VideoCall = () => {
             <div className="text-center">
               {otherUser?.profile_img ? (
                 <img
-                  src={`${API_BASE_URL}${otherUser.profile_img}`}
+                  // src={`${API_BASE_URL}${otherUser.profile_img}`}
+                  src={otherUser.profile_img}
                   alt={otherUser.name}
                   className="h-32 w-32 rounded-full mx-auto mb-4 object-cover"
                 />

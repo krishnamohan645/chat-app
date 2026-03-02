@@ -19,12 +19,11 @@ const TopNav = ({ onMenuClick, unreadNotifications = 3 }) => {
   };
 
   const avatarUrl = user?.profile_img
-    ? `${API_BASE_URL}${user.profile_img}`
+    ? // ? `${API_BASE_URL}${user.profile_img}`
+      user.profile_img
     : null;
 
-  const initials = user?.username
-    ? user.username.charAt(0).toUpperCase()
-    : "U";
+  const initials = user?.username ? user.username.charAt(0).toUpperCase() : "U";
 
   return (
     <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-50">

@@ -91,7 +91,8 @@ const ChatList = () => {
               <div className="h-12 w-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                 {chat.profile_img ? (
                   <img
-                    src={`${API_BASE_URL}${chat.profile_img}`}
+                    // src={`${API_BASE_URL}${chat.profile_img}`}
+                    src={chat.profile_img}
                     alt={chat.name}
                     className="h-full w-full object-cover"
                   />

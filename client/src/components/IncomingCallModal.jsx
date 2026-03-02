@@ -48,7 +48,8 @@ const IncomingCallModal = () => {
         <div className="mb-6">
           {callerInfo?.profile_img ? (
             <img
-              src={`${API_BASE_URL}${callerInfo.profile_img}`}
+              // src={`${API_BASE_URL}${callerInfo.profile_img}`}
+              src={callerInfo.profile_img}
               alt={callerInfo.username}
               className="h-24 w-24 rounded-full mx-auto object-cover ring-4 ring-blue-500/30 animate-pulse"
             />

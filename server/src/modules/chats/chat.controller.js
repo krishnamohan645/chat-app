@@ -1,4 +1,5 @@
 const chatService = require("./chat.service.js");
+const { redisClient } = require("../../config/redis");
 
 const createPrivateChat = async (req, res, next) => {
   try {
@@ -140,6 +141,9 @@ const searchChats = async (req, res, next) => {
 
 const getChatList = async (req, res, next) => {
   try {
+    await redisClient.set("test-key", "hello-redis");
+    const value = await redisClient.get("test-key");
+    console.log("Redis Value:", value);
     const chats = await chatService.getChatList(req.user.id);
     res.json({ chats });
   } catch (err) {

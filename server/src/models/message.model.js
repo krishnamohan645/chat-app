@@ -57,6 +57,10 @@ const Message = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    cloudinaryId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     indexes: [
