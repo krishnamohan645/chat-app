@@ -19,7 +19,6 @@ import {
   markAsReadThunk,
   markAllAsReadThunk,
 } from "../features/notifications/notificationsSlice";
-import { API_BASE_URL } from "../config/constants";
 
 const getNotificationIcon = (type) => {
   switch (type.toUpperCase()) {
@@ -145,7 +144,7 @@ const Notifications = () => {
       }
     }
   };
-  
+
   // ✅ Mark all as read
   const handleMarkAllAsRead = () => {
     dispatch(markAllAsReadThunk());
@@ -212,7 +211,8 @@ const Notifications = () => {
             {notification.sender?.profile_img ? (
               <div className="h-12 w-12 rounded-full overflow-hidden flex-shrink-0">
                 <img
-                  src={`${API_BASE_URL}${notification.sender.profile_img}`}
+                  // src={`${API_BASE_URL}${notification.sender.profile_img}`}
+                  src={notification.sender.profile_img}
                   alt={notification.sender.username}
                   className="h-full w-full object-cover"
                 />

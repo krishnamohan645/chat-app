@@ -20,7 +20,7 @@ import {
   getGroupMembersThunk,
 } from "../features/groups/groupsSlice";
 import { getSocket } from "./socket";
-import { addNotificationRealtime } from "../features/notifications/notificationsSlice";
+import { addNotificationRealtime, markChatNotificationsAsRead } from "../features/notifications/notificationsSlice";
 import {
   clearCurrentCall,
   clearIncomingCall,
@@ -363,6 +363,11 @@ export const registerSocketListeners = (dispatch) => {
 
     alert(messages[reason] || "Cannot start call");
     dispatch(clearCurrentCall());
+  });
+
+  // Notifications as read when chat opened
+  socket.on("notifications:updated", ({ chatId }) => {
+    dispatch(markChatNotificationsAsRead(chatId));
   });
 
   // Verify listeners are attached

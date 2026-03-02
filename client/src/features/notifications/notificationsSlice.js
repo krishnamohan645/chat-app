@@ -80,6 +80,21 @@ const notificationsSlice = createSlice({
         state.unreadCount -= 1;
       }
     },
+    markChatNotificationsAsRead: (state, action) => {
+      const chatId = action.payload;
+
+      state.notifications = state.notifications.map((notif) => {
+        if (notif.chatId === chatId && !notif.isRead) {
+          return { ...notif, isRead: true };
+        }
+        return notif;
+      });
+
+      // Recalculate unread count
+      state.unreadCount = state.notifications.filter(
+        (notif) => !notif.isRead,
+      ).length;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -122,5 +137,9 @@ const notificationsSlice = createSlice({
   },
 });
 
-export const { addNotificationRealtime, decrementUnreadCount} = notificationsSlice.actions;
+export const {
+  addNotificationRealtime,
+  decrementUnreadCount,
+  markChatNotificationsAsRead,
+} = notificationsSlice.actions;
 export default notificationsSlice.reducer;
