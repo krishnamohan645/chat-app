@@ -30,6 +30,6 @@ sequelize.sync().then(async () => {
   await connectRedis(); // ✅ actually connect Redis
 
   server.listen(PORT, () => {
-    console.log(`🚀 Server + Socket running on http://localhost:${PORT}`);
+    console.log(`🚀 Server + Socket running on port ${PORT}`);
   });
 });
