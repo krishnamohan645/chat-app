@@ -133,6 +133,12 @@ const logoutController = async (req, res, next) => {
 const refreshController = async (req, res, next) => {
   try {
     const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        message: "Refresh token missing",
+      });
+    }
     const newAccessToken = await authService.refreshUser(refreshToken);
     if (!newAccessToken) {
       return res.status(401).json({ message: "No refresh token" });

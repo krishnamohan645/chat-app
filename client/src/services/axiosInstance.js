@@ -27,18 +27,32 @@ export const setStoreReference = (store) => {
 };
 
 // ✅ Response interceptor for token refresh
+// ✅ FIXED VERSION:
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
     const originalRequest = err.config;
+    const status = err.response?.status;
 
-    // Don't retry /auth/refresh itself
+    // ⚠️ If refresh endpoint fails with 401/403, logout immediately
     if (originalRequest.url.includes("/auth/refresh")) {
+      if (status === 401 || status === 403) {
+        console.error("❌ Refresh token invalid, logging out");
+
+        if (storeReference) {
+          const { logoutLocal } = await import("../features/auth/authSlice");
+          storeReference.dispatch(logoutLocal());
+        }
+
+        window.location.href = "/login";
+      }
+
+      // For 500 errors, just reject without logout
       return Promise.reject(err);
     }
 
-    // If 401 and haven't retried
-    if (err.response?.status === 401 && !originalRequest._retry) {
+    // If 401 on normal request and haven't retried
+    if (status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
@@ -60,15 +74,25 @@ api.interceptors.response.use(
         console.log("✅ Token refreshed, retrying request");
         return api(originalRequest);
       } catch (refreshError) {
-        console.error("❌ Token refresh failed, logging out");
+        const refreshStatus = refreshError.response?.status;
 
-        // Logout user
-        if (storeReference) {
-          const { logoutLocal } = await import("../features/auth/authSlice");
-          storeReference.dispatch(logoutLocal());
+        // Only logout on auth errors, not server errors
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          console.error("❌ Token refresh failed (auth error), logging out");
+
+          if (storeReference) {
+            const { logoutLocal } = await import("../features/auth/authSlice");
+            storeReference.dispatch(logoutLocal());
+          }
+
+          window.location.href = "/login";
+        } else {
+          console.error(
+            "❌ Token refresh failed (server error):",
+            refreshError,
+          );
         }
 
-        window.location.href = "/login";
         return Promise.reject(refreshError);
       }
     }
