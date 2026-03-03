@@ -806,7 +806,7 @@ const initSocket = (server) => {
   //   cors: { origin: "*" },
   // });
 
-  const io = new Server(server, {
+  io = new Server(server, {
     cors: {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
@@ -823,6 +823,7 @@ const initSocket = (server) => {
       credentials: true,
     },
   });
+
   // ── JWT Authentication Middleware ──────────────────────────
   io.use(async (socket, next) => {
     try {
