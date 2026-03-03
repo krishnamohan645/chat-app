@@ -802,10 +802,27 @@ const deleteCall = async (callId) => {
 // ============================================================
 
 const initSocket = (server) => {
-  io = new Server(server, {
-    cors: { origin: "*" },
-  });
+  // io = new Server(server, {
+  //   cors: { origin: "*" },
+  // });
 
+  const io = new Server(server, {
+    cors: {
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+
+        if (
+          origin === process.env.FRONTEND_URL ||
+          origin.endsWith(".vercel.app")
+        ) {
+          return callback(null, true);
+        }
+
+        callback(new Error("Not allowed by CORS"));
+      },
+      credentials: true,
+    },
+  });
   // ── JWT Authentication Middleware ──────────────────────────
   io.use(async (socket, next) => {
     try {
