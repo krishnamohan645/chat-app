@@ -17,7 +17,7 @@ const getCookieOptions = () => {
 const registerController = async (req, res, next) => {
   try {
     await authService.registerUser({
-      ...req.body,
+      ...req.body, 
       profileImg: req.file || null,
     });
     res.status(201).json({
