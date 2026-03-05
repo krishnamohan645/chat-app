@@ -26,45 +26,22 @@
 
 // module.exports = sendEmailOtp;
 
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || "smtp.resend.com",
-  port: parseInt(process.env.EMAIL_PORT) || 465,
-  secure: true, // true for port 465
-  auth: {
-    user: process.env.EMAIL_USER || "resend",
-    pass: process.env.EMAIL_PASS, // Resend API key
-  },
-});
-
-// Verify transporter on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("❌ EMAIL TRANSPORTER ERROR:");
-    console.error("   Message:", error.message);
-    console.error("   Code:", error.code);
-    console.error("   Response:", error.response);
-  } else {
-    console.log("✅ Email server ready (Resend SMTP)");
-    console.log("   Host:", process.env.EMAIL_HOST || "smtp.resend.com");
-    console.log("   Port:", process.env.EMAIL_PORT || 465);
-    console.log("   User:", process.env.EMAIL_USER || "resend");
-  }
-});
+// Initialize Resend with API key
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendEmailOtp = async (email, otp) => {
-  console.log("📧 ATTEMPTING TO SEND EMAIL VIA RESEND:");
+  console.log("📧 ATTEMPTING TO SEND EMAIL VIA RESEND HTTP API:");
   console.log("   To:", email);
   console.log("   OTP:", otp);
   console.log("   From: onboarding@resend.dev");
 
   try {
-    const info = await transporter.sendMail({
-      from: "Chat App <onboarding@resend.dev>", // ✅ Resend's verified domain
-      to: email,
+    const { data, error } = await resend.emails.send({
+      from: "Chat App <onboarding@resend.dev>",
+      to: [email],
       subject: "Your OTP Code - Chat App",
-      text: `Your OTP is ${otp}. This code will expire in 5 minutes.`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -140,19 +117,19 @@ const sendEmailOtp = async (email, otp) => {
       `,
     });
 
-    console.log("✅ EMAIL SENT SUCCESSFULLY VIA RESEND:");
-    console.log("   Message ID:", info.messageId);
-    console.log("   Response:", info.response);
-    console.log("   Accepted:", info.accepted);
-    console.log("   Rejected:", info.rejected);
+    if (error) {
+      console.error("❌ RESEND API ERROR:", error);
+      throw new Error(error.message);
+    }
 
-    return info;
+    console.log("✅ EMAIL SENT SUCCESSFULLY VIA RESEND HTTP API:");
+    console.log("   Email ID:", data.id);
+
+    return data;
   } catch (error) {
     console.error("❌ RESEND EMAIL SEND FAILED:");
     console.error("   Error Type:", error.constructor.name);
     console.error("   Message:", error.message);
-    console.error("   Code:", error.code);
-    console.error("   Response:", error.response);
 
     throw new Error(`Failed to send email via Resend: ${error.message}`);
   }
