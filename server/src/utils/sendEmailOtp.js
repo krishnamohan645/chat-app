@@ -30,15 +30,14 @@ const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "smtp.gmail.com",
-  port: parseInt(process.env.EMAIL_PORT) || 587,
-  secure: false, // true for 465, false for 587
+  port: parseInt(process.env.EMAIL_PORT) || 465, // ✅ Changed to 465
+  secure: true, // ✅ Changed to true for port 465
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  tls: {
-    rejectUnauthorized: false,
-  },
+  connectionTimeout: 10000, // ✅ Add timeout (10 seconds)
+  greetingTimeout: 5000,    // ✅ Add greeting timeout
 });
 
 // ✅ Verify transporter on startup
@@ -51,7 +50,7 @@ transporter.verify((error, success) => {
   } else {
     console.log("✅ Email server ready to send messages");
     console.log("   Host:", process.env.EMAIL_HOST || "smtp.gmail.com");
-    console.log("   Port:", process.env.EMAIL_PORT || 587);
+    console.log("   Port:", process.env.EMAIL_PORT || 465);
     console.log("   User:", process.env.EMAIL_USER);
   }
 });
@@ -62,7 +61,7 @@ const sendEmailOtp = async (email, otp) => {
   console.log("   OTP:", otp);
   console.log("   From:", process.env.EMAIL_USER);
   console.log("   Host:", process.env.EMAIL_HOST || "smtp.gmail.com");
-  console.log("   Port:", process.env.EMAIL_PORT || 587);
+  console.log("   Port:", process.env.EMAIL_PORT || 465);
 
   try {
     const info = await transporter.sendMail({
@@ -99,7 +98,7 @@ const sendEmailOtp = async (email, otp) => {
     console.log("   Response:", info.response);
     console.log("   Accepted:", info.accepted);
     console.log("   Rejected:", info.rejected);
-
+    
     return info;
   } catch (error) {
     console.error("❌ EMAIL SEND FAILED:");
@@ -109,8 +108,7 @@ const sendEmailOtp = async (email, otp) => {
     console.error("   Command:", error.command);
     console.error("   Response:", error.response);
     console.error("   Stack:", error.stack);
-
-    // Re-throw so calling code knows it failed
+    
     throw new Error(`Failed to send email: ${error.message}`);
   }
 };

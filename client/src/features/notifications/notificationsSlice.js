@@ -94,6 +94,16 @@ const notificationsSlice = createSlice({
       state.unreadCount = state.notifications.filter(
         (notif) => !notif.isRead,
       ).length;
+
+      setUnreadCount: (state, action) => {
+        state.unreadCount = action.payload;
+      };
+      incrementUnread: (state) => {
+        state.unreadCount += 1;
+      };
+      clearUnread: (state) => {
+        state.unreadCount = 0;
+      };
     },
   },
   extraReducers: (builder) => {
@@ -141,5 +151,8 @@ export const {
   addNotificationRealtime,
   decrementUnreadCount,
   markChatNotificationsAsRead,
+  setUnreadCount,
+  incrementUnread,
+  clearUnread,
 } = notificationsSlice.actions;
 export default notificationsSlice.reducer;
