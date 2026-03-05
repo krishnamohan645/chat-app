@@ -30,19 +30,22 @@ const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  connectionTimeout: 10000,
+  port: 587,
+  secure: false, // important
+  requireTLS: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
 async function sendEmailOtp(email, otp) {
   try {
     await transporter.verify();
-    console.log("SMTP connected");
+    console.log("SMTP ready");
 
     await transporter.sendMail({
       from: `"Messenger Demo" <${process.env.EMAIL_USER}>`,
