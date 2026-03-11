@@ -20,7 +20,10 @@ import {
   getGroupMembersThunk,
 } from "../features/groups/groupsSlice";
 import { getSocket } from "./socket";
-import { addNotificationRealtime, markChatNotificationsAsRead } from "../features/notifications/notificationsSlice";
+import {
+  addNotificationRealtime,
+  markChatNotificationsAsRead,
+} from "../features/notifications/notificationsSlice";
 import {
   clearCurrentCall,
   clearIncomingCall,
@@ -236,7 +239,8 @@ export const registerSocketListeners = (dispatch) => {
       const notif = new Notification(notification.title, {
         body: notification.body,
         icon: notification.sender?.profile_img
-          ? `${import.meta.env.VITE_API_URL}${notification.sender.profile_img}`
+          ? // ? `${import.meta.env.VITE_API_URL}${notification.sender.profile_img}`
+            notification.sender.profile_img
           : "/logo.png",
         tag: `notification-${notification.id}`,
         requireInteraction: false,
