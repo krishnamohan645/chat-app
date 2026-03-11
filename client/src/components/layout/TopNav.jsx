@@ -19,7 +19,8 @@ const TopNav = ({ onMenuClick, unreadNotifications = 3 }) => {
   };
 
   const avatarUrl = user?.profile_img
-    ? `${API_BASE_URL}${user.profile_img}`
+    ? // ? `${API_BASE_URL}${user.profile_img}`
+      user.profile_img
     : // user.profile_img
       null;
 
