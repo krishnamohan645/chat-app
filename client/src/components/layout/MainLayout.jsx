@@ -5,18 +5,21 @@ import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
 import { useDispatch, useSelector } from "react-redux";
 import { getMyProfile } from "../../features/user/userSlice";
+import { getUnreadCountThunk } from "../../features/notifications/notificationsSlice";
 
 const MainLayout = () => {
   const dispatch = useDispatch();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { isAuthenticated, authLoading } = useSelector((state) => state.auth);
+  const { unreadCount } = useSelector((state) => state.notifications);
 
   // ✅ Fetch profile once authenticated
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
       console.log("👤 Fetching user profile...");
       dispatch(getMyProfile());
+      dispatch(getUnreadCountThunk());
     }
   }, [isAuthenticated, authLoading, dispatch]);
 
@@ -24,7 +27,7 @@ const MainLayout = () => {
     <div className="min-h-screen bg-background bg-gray-900">
       <TopNav
         onMenuClick={() => setSidebarOpen(true)}
-        unreadNotifications={3}
+        unreadNotifications={unreadCount}
       />
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 

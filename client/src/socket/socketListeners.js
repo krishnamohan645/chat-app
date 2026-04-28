@@ -20,7 +20,11 @@ import {
   getGroupMembersThunk,
 } from "../features/groups/groupsSlice";
 import { getSocket } from "./socket";
-import { addNotificationRealtime, markChatNotificationsAsRead } from "../features/notifications/notificationsSlice";
+import {
+  addNotificationRealtime,
+  getUnreadCountThunk,
+  markChatNotificationsAsRead,
+} from "../features/notifications/notificationsSlice";
 import {
   clearCurrentCall,
   clearIncomingCall,
@@ -365,9 +369,15 @@ export const registerSocketListeners = (dispatch) => {
     dispatch(clearCurrentCall());
   });
 
-  // Notifications as read when chat opened
-  socket.on("notifications:updated", ({ chatId }) => {
-    dispatch(markChatNotificationsAsRead(chatId));
+  // Notifications updated (read in chat, mark-all, etc.)
+  socket.on("notifications:updated", (payload = {}) => {
+    const { chatId } = payload;
+
+    if (chatId) {
+      dispatch(markChatNotificationsAsRead(chatId));
+    }
+
+    dispatch(getUnreadCountThunk());
   });
 
   // Verify listeners are attached

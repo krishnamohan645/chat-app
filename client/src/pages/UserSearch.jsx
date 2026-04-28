@@ -9,10 +9,11 @@ import {
   searchUsers,
 } from "../features/user/userSlice";
 import { API_BASE_URL } from "../config/constants";
-import { createPrivateChat } from "../features/chats/chatSlice";
+import { createPrivateChat, getChatList } from "../features/chats/chatSlice";
 
 const UserSearch = () => {
   const [query, setQuery] = useState("");
+  const [creatingForUserId, setCreatingForUserId] = useState(null);
   const debouncedQuery = useDebounce(query, 300);
 
   const dispatch = useDispatch();
@@ -22,10 +23,12 @@ const UserSearch = () => {
     searchUsers: searchedUsers,
     loading,
   } = useSelector((state) => state.user);
+  const { chats } = useSelector((state) => state.chats);
 
   // load all users on mount
   useEffect(() => {
     dispatch(getAllUsers());
+    dispatch(getChatList());
   }, [dispatch]);
 
   // search users
@@ -38,12 +41,41 @@ const UserSearch = () => {
     dispatch(searchUsers(debouncedQuery));
   }, [debouncedQuery, dispatch]);
 
-  const list = debouncedQuery ? searchedUsers : users;
+  const existingPrivateUserIds = new Set(
+    (chats || [])
+      .map((chat) => Number(chat.otherUserId))
+      .filter((id) => Number.isFinite(id)),
+  );
+
+  const baseList = debouncedQuery ? searchedUsers : users;
+  const list = (baseList || []).filter(
+    (user) => !existingPrivateUserIds.has(Number(user.id)),
+  );
 
   const handleCreateChat = async (userId) => {
-    const res = await dispatch(createPrivateChat(userId));
-    if (res.meta.requestStatus === "fulfilled") {
-      navigate(`/chat/${res.payload.id}`);
+    const existingChat = (chats || []).find(
+      (chat) => Number(chat.otherUserId) === Number(userId),
+    );
+    if (existingChat?.chatId) {
+      navigate(`/chat/${existingChat.chatId}`);
+      return;
+    }
+
+    try {
+      setCreatingForUserId(userId);
+      const res = await dispatch(createPrivateChat(userId));
+
+      if (res.meta.requestStatus !== "fulfilled") return;
+
+      const chatId =
+        res.payload?.chat?.id ?? res.payload?.chatId ?? res.payload?.id;
+
+      if (!chatId) return;
+
+      dispatch(getChatList());
+      navigate(`/chat/${chatId}`);
+    } finally {
+      setCreatingForUserId(null);
     }
   };
 
@@ -127,6 +159,7 @@ const UserSearch = () => {
               {/* <Link to={`/chat/${user.id}`}> */}
               <button
                 onClick={() => handleCreateChat(user.id)}
+                disabled={creatingForUserId === user.id}
                 className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
               >
                 <MessageCircle className="h-5 w-5" />

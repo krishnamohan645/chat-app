@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { logoutUser } from "../../features/auth/authSlice";
 import { API_BASE_URL } from "../../config/constants";
 
-const TopNav = ({ onMenuClick, unreadNotifications = 3 }) => {
+const TopNav = ({ onMenuClick, unreadNotifications = 0 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const dispatch = useDispatch();
