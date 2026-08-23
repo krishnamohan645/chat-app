@@ -78,7 +78,7 @@ const notifyOnNewMessage = async (chatId, senderId, content) => {
       ],
     });
 
-    // ✅ FIX: Changed "notification" to "new-notification"
+    //  FIX: Changed "notification" to "new-notification"
     getIO()
       .to(`user-${notification.userId}`)
       .emit("new-notification", fullNotification);
@@ -126,14 +126,14 @@ const notifyGroupEvent = async ({
       continue;
     }
 
-    // ✅ FIX: Use the passed parameters, not undefined variables
+    //  FIX: Use the passed parameters, not undefined variables
     notificationsToCreate.push({
       userId: member.userId,
       senderId,
       chatId,
-      type,   // ✅ FIXED
-      title,  // ✅ FIXED
-      body,   // ✅ FIXED
+      type,   //  FIXED
+      title,  //  FIXED
+      body,   //  FIXED
     });
   }
 
@@ -157,7 +157,7 @@ const notifyGroupEvent = async ({
       ],
     });
 
-    // ✅ FIX: Changed "notification" to "new-notification"
+    //  FIX: Changed "notification" to "new-notification"
     getIO()
       .to(`user-${notification.userId}`)
       .emit("new-notification", fullNotification);

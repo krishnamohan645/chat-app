@@ -2,7 +2,7 @@ const cloudinary = require("cloudinary").v2;
 const path = require("path");
 const fs = require("fs").promises;
 
-// ✅ Configure Cloudinary with your credentials
+//  Configure Cloudinary with your credentials
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -37,7 +37,7 @@ const uploadFile = async (file, folder = "chat-app") => {
   const timestamp = Date.now();
 
   try {
-    console.log(`📤 Uploading to Cloudinary: ${file.originalname}`);
+    console.log(` Uploading to Cloudinary: ${file.originalname}`);
 
     // Upload to Cloudinary
     const result = await cloudinary.uploader.upload(file.path, {
@@ -46,12 +46,12 @@ const uploadFile = async (file, folder = "chat-app") => {
       public_id: `${originalName}-${timestamp}`,
     });
 
-    console.log(`✅ Uploaded: ${result.secure_url}`);
+    console.log(`Uploaded: ${result.secure_url}`);
 
     // Delete local temporary file
     try {
       await fs.unlink(file.path);
-      console.log(`🗑️ Deleted local file: ${file.path}`);
+      console.log(` Deleted local file: ${file.path}`);
     } catch (unlinkError) {
       console.error("Failed to delete local file:", unlinkError);
     }
@@ -65,7 +65,7 @@ const uploadFile = async (file, folder = "chat-app") => {
       cloudinaryId: result.public_id, // For deletion later
     };
   } catch (error) {
-    console.error("❌ Cloudinary upload failed:", error);
+    console.error("Cloudinary upload failed:", error);
     throw new Error(`Failed to upload file: ${error.message}`);
   }
 };
@@ -79,13 +79,13 @@ const uploadFile = async (file, folder = "chat-app") => {
 //   if (!publicId) return;
 
 //   try {
-//     console.log(`🗑️ Deleting from Cloudinary: ${publicId}`);
+//     console.log(` Deleting from Cloudinary: ${publicId}`);
 
 //     const result = await cloudinary.uploader.destroy(publicId, {
 //       resource_type: resourceType,
 //     });
 
-//     console.log(`✅ Deleted: ${result.result}`);
+//     console.log(` Deleted: ${result.result}`);
 //     return result;
 //   } catch (error) {
 //     console.error("❌ Delete failed:", error);
@@ -101,7 +101,7 @@ const deleteFile = async (publicId, resourceType = "auto") => {
     });
     return result;
   } catch (error) {
-    console.error("❌ Delete failed:", error);
+    console.error(" Delete failed:", error);
   }
 };
 

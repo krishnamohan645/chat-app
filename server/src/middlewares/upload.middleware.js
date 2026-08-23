@@ -47,7 +47,7 @@ const uploadDir = path.join(__dirname, "..", "..", "..", "uploads");
 const ensureDir = (dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
-    console.log(`✅ Created uploads directory: ${dir}`);
+    console.log(`Created uploads directory: ${dir}`);
   }
 };
 
@@ -74,7 +74,7 @@ const storage = multer.diskStorage({
     const uploadPath = path.join(uploadDir, folder);
     ensureDir(uploadPath);
 
-    console.log("📁 Saving file to:", uploadPath);
+    console.log(" Saving file to:", uploadPath);
 
     cb(null, uploadPath);
   },
@@ -91,7 +91,7 @@ const upload = multer({
     fileSize: 100 * 1024 * 1024, // 100MB
   },
   fileFilter: (req, file, cb) => {
-    // ✅ Allow all common file types
+    // Allow all common file types
     const allowedTypes =
       /jpeg|jpg|png|gif|webp|bmp|svg|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|mp3|wav|ogg|m4a|mp4|mov|avi|mkv|webm/;
     const extname = allowedTypes.test(

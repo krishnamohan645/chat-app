@@ -17,17 +17,14 @@ const { connectRedis } = require("./src/config/redis");
 
 const PORT = process.env.PORT || 5000;
 
-// 🔥 create http server from app
 const server = http.createServer(app);
 
-// 🔥 attach socket to THIS server
 initSocket(server);
 
-// 🔥 start server (ONLY HERE)
 sequelize.sync().then(async () => {
   console.log("Database Synced");
 
-  await connectRedis(); // ✅ actually connect Redis
+  await connectRedis(); 
 
   server.listen(PORT, () => {
     console.log(`🚀 Server + Socket running on http://localhost:${PORT}`);

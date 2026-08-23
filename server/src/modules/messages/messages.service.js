@@ -70,18 +70,6 @@ const sendMessage = async (chatId, userId, content) => {
     })),
   );
 
-  // After bulkCreate - ADD this block (both functions)
-  // members.forEach((m) => {
-  //   const status = isUserOnline(m.userId) ? "delivered" : "sent";
-  //   getIO()
-  //     .to(`user-${m.userId}`) // Send to receiver's user room
-  //     .emit("message-status:update", {
-  //       chatId,
-  //       messageId: msg.id,
-  //       status,
-  //     });
-  // });
-
   await Chats.update(
     {
       updatedAt: new Date(),
@@ -94,7 +82,7 @@ const sendMessage = async (chatId, userId, content) => {
     id: msg.id,
     chatId: msg.chatId,
     senderId: msg.senderId,
-    content: content, // ✅ Plain text (original parameter)
+    content: content, // Plain text (original parameter)
     type: msg.type,
     createdAt: msg.createdAt,
     isEdited: msg.isEdited,
@@ -103,7 +91,7 @@ const sendMessage = async (chatId, userId, content) => {
     fileSize: msg.fileSize,
     mimeType: msg.mimeType,
   });
-  console.log("🔥 emitting chat-list:update");
+  console.log("emitting chat-list:update");
 
   const deliveredToSomeone = members.some((m) => isUserOnline(m.userId));
 
@@ -115,7 +103,7 @@ const sendMessage = async (chatId, userId, content) => {
     });
   }
 
-  // 🔔 update chat list in realtime (USER-SPECIFIC)
+  // update chat list in realtime (USER-SPECIFIC)
   const chatMembers = await GroupMembers.findAll({
     where: {
       chatId,
@@ -173,9 +161,9 @@ const sendMessage = async (chatId, userId, content) => {
 const getMessages = async (chatId, userId, limit, offset) => {
   const membership = await isMemberOrWasMember(chatId, userId);
 
-  console.log(`📨 Fetching messages for chat ${chatId}, user ${userId}`);
+  console.log(`Fetching messages for chat ${chatId}, user ${userId}`);
 
-  console.log(`📨 Fetching messages for chat ${chatId}, user ${userId}`);
+  console.log(`Fetching messages for chat ${chatId}, user ${userId}`);
 
   const deletedForMe = await MessageStatus.findAll({
     where: {
@@ -188,18 +176,18 @@ const getMessages = async (chatId, userId, limit, offset) => {
 
   const deletedMessageIds = deletedForMe.map((d) => d.messageId);
 
-  // ✅ Build query with leftAt filter
+  // Build query with leftAt filter
   const whereClause = {
     chatId,
     id: { [Op.notIn]: deletedMessageIds.length ? deletedMessageIds : [0] },
   };
 
-  // 🔥 If user has left, only show messages BEFORE they left
+  //  If user has left, only show messages BEFORE they left
   if (membership.leftAt) {
     whereClause.createdAt = { [Op.lte]: membership.leftAt };
   }
 
-  // ✅ Step 1: Fetch messages WITHOUT includes
+  //  Step 1: Fetch messages WITHOUT includes
   const messages = await Messages.findAll({
     where: {
       chatId,
@@ -212,16 +200,16 @@ const getMessages = async (chatId, userId, limit, offset) => {
     raw: true, // Get plain objects
   });
 
-  console.log(`📦 Found ${messages.length} messages`);
+  console.log(` Found ${messages.length} messages`);
 
   if (messages.length === 0) {
     return [];
   }
 
-  // ✅ Step 2: Get all message IDs
+  //  Step 2: Get all message IDs
   const messageIds = messages.map((m) => m.id);
 
-  // ✅ Step 3: Fetch ALL MessageStatus records for these messages
+  //  Step 3: Fetch ALL MessageStatus records for these messages
   const allStatuses = await MessageStatus.findAll({
     where: {
       messageId: { [Op.in]: messageIds },
@@ -238,7 +226,7 @@ const getMessages = async (chatId, userId, limit, offset) => {
   //   ),
   // );
 
-  // ✅ Step 4: Get chat members
+  //  Step 4: Get chat members
   const members = await GroupMembers.findAll({
     where: { chatId, leftAt: null },
     attributes: ["userId"],
@@ -251,14 +239,14 @@ const getMessages = async (chatId, userId, limit, offset) => {
 
   // console.log(`👥 Receivers: ${receivers.join(", ")}`);
 
-  // ✅ Step 5: Map messages with their status
+  //  Step 5: Map messages with their status
   return messages.map((m) => {
     let status = "sent";
 
     // Get all statuses for this specific message
     const messageStatuses = allStatuses.filter((s) => s.messageId === m.id);
 
-    // console.log(`\n🔍 Processing message ${m.id}:`);
+    // console.log(`\n Processing message ${m.id}:`);
     // console.log(`   Sender: ${m.senderId}, Current User: ${userId}`);
     // console.log(
     //   `   Statuses:`,
@@ -266,13 +254,13 @@ const getMessages = async (chatId, userId, limit, offset) => {
     // );
 
     if (m.senderId === userId) {
-      // ✅ I SENT this message - check RECEIVER's status
+      //  I SENT this message - check RECEIVER's status
       const receiverStatuses = messageStatuses.filter((s) =>
         receivers.includes(s.userId),
       );
 
       console.log(
-        `   ✉️ I sent this. Receiver statuses:`,
+        `    I sent this. Receiver statuses:`,
         receiverStatuses.map((s) => `${s.userId}: ${s.status}`),
       );
 
@@ -287,14 +275,14 @@ const getMessages = async (chatId, userId, limit, offset) => {
         }
       }
     } else {
-      // ✅ I RECEIVED this message - check MY status
+      //  I RECEIVED this message - check MY status
       const myStatus = messageStatuses.find((s) => s.userId === userId);
       status = myStatus?.status || "delivered";
 
-      // console.log(`   📥 I received this. My status: ${status}`);
+      // console.log(`    I received this. My status: ${status}`);
     }
 
-    // console.log(`   ✅ Final status: ${status}`);
+    // console.log(`    Final status: ${status}`);
 
     return {
       id: m.id,
@@ -306,7 +294,7 @@ const getMessages = async (chatId, userId, limit, offset) => {
       createdAt: m.createdAt,
       status,
       isEdited: m.isEdited,
-      // ✅ Add these file fields
+      //  Add these file fields
       fileUrl: m.fileUrl,
       fileName: m.fileName,
       fileSize: m.fileSize,
@@ -342,7 +330,7 @@ const deleteMessageForEveryone = async (messageId, userId) => {
     throw new Error("Not allowed");
   }
 
-  // ✅ Delete from Cloudinary
+  //  Delete from Cloudinary
   if (msg.cloudinaryId) {
     try {
       let resourceType = "raw";
@@ -351,7 +339,7 @@ const deleteMessageForEveryone = async (messageId, userId) => {
         resourceType = "video";
 
       await deleteFile(msg.cloudinaryId, resourceType);
-      console.log("✅ Deleted from Cloudinary");
+      console.log(" Deleted from Cloudinary");
     } catch (error) {
       console.error("Failed to delete from Cloudinary:", error);
     }
@@ -387,7 +375,7 @@ const deleteMessageForMe = async (messageId, userId) => {
     isDeleted: true,
   });
 
-  // ✅ No socket event needed (only affects this user)
+  //  No socket event needed (only affects this user)
   return { message: "Message deleted for you" };
 };
 
@@ -434,7 +422,7 @@ const sendFileMessage = async (chatId, userId, file) => {
     }
   }
 
-  // ✅ Better file type detection
+  //  Better file type detection
   let type = "file"; // default
 
   if (file.mimetype.startsWith("image/")) {
@@ -453,12 +441,12 @@ const sendFileMessage = async (chatId, userId, file) => {
     type = "document";
   }
 
-  // ✅ Upload to Cloudinary
+  //  Upload to Cloudinary
   let uploaded;
   try {
     console.log("📤 Uploading chat file...");
     uploaded = await uploadChatFile(file);
-    console.log("✅ Uploaded:", uploaded.fileUrl);
+    console.log(" Uploaded:", uploaded.fileUrl);
   } catch (error) {
     console.error("Failed to upload file:", error);
     throw new Error("Failed to upload file to cloud storage");
@@ -469,14 +457,14 @@ const sendFileMessage = async (chatId, userId, file) => {
     senderId: userId,
     type,
     content: null,
-    fileUrl: uploaded.fileUrl, // ✅ Cloudinary URL
+    fileUrl: uploaded.fileUrl, //  Cloudinary URL
     fileName: uploaded.fileName,
     fileSize: uploaded.fileSize,
     mimeType: uploaded.mimeType,
-    cloudinaryId: uploaded.cloudinaryId, // ✅ For deletion
+    cloudinaryId: uploaded.cloudinaryId, //  For deletion
   });
 
-  // ✅ CREATE MESSAGE STATUS
+  //  CREATE MESSAGE STATUS
   const members = await GroupMembers.findAll({
     where: {
       chatId,
@@ -493,10 +481,10 @@ const sendFileMessage = async (chatId, userId, file) => {
     })),
   );
 
-  // ✅ UPDATE CHAT TIMESTAMP
+  //  UPDATE CHAT TIMESTAMP
   await Chats.update({ updatedAt: new Date() }, { where: { id: chatId } });
 
-  // ✅ EMIT NEW MESSAGE
+  //  EMIT NEW MESSAGE
   getIO().to(`chat-${chatId}`).emit("new-message", {
     id: msg.id,
     chatId: msg.chatId,
@@ -511,7 +499,7 @@ const sendFileMessage = async (chatId, userId, file) => {
     mimeType: msg.mimeType,
   });
 
-  // ✅ CHECK IF DELIVERED TO SOMEONE ONLINE (THIS WAS MISSING!)
+  //  CHECK IF DELIVERED TO SOMEONE ONLINE (THIS WAS MISSING!)
   const deliveredToSomeone = members.some((m) => isUserOnline(m.userId));
 
   if (deliveredToSomeone) {
@@ -521,7 +509,7 @@ const sendFileMessage = async (chatId, userId, file) => {
     });
   }
 
-  // ✅ UPDATE CHAT LIST
+  //  UPDATE CHAT LIST
   const chatMembers = await GroupMembers.findAll({
     where: {
       chatId,
@@ -559,7 +547,7 @@ const sendFileMessage = async (chatId, userId, file) => {
       });
   });
 
-  // ✅ SEND NOTIFICATION
+  //  SEND NOTIFICATION
   await notifyOnNewMessage(chatId, userId, file.originalname || "media");
 
   return msg;
@@ -574,7 +562,7 @@ const searchMessages = async (chatId, userId, search) => {
 
   console.log(`🔍 Searching for "${search}" in chat ${chatId}`);
 
-  // ✅ Fetch ALL text messages (they're encrypted in DB)
+  //  Fetch ALL text messages (they're encrypted in DB)
   const messages = await Messages.findAll({
     where: {
       chatId,
@@ -587,7 +575,7 @@ const searchMessages = async (chatId, userId, search) => {
 
   console.log(`📦 Found ${messages.length} text messages to search`);
 
-  // ✅ Decrypt and filter in memory
+  //  Decrypt and filter in memory
   const searchLower = search.toLowerCase();
 
   const matchingMessages = messages
@@ -614,7 +602,7 @@ const searchMessages = async (chatId, userId, search) => {
     })
     .slice(0, 50); // Return max 50 results
 
-  console.log(`✅ Found ${matchingMessages.length} matching messages`);
+  console.log(` Found ${matchingMessages.length} matching messages`);
 
   return matchingMessages;
 };
@@ -635,7 +623,7 @@ const sendStickerMessage = async (chatId, userId, emoji) => {
     content: emoji,
   });
 
-  // ✅ CREATE MESSAGE STATUS for receivers
+  //  CREATE MESSAGE STATUS for receivers
   const members = await GroupMembers.findAll({
     where: { chatId, leftAt: null, userId: { [Op.ne]: userId } },
   });
@@ -648,15 +636,15 @@ const sendStickerMessage = async (chatId, userId, emoji) => {
     })),
   );
 
-  // ✅ UPDATE CHAT TIMESTAMP
+  //  UPDATE CHAT TIMESTAMP
   await Chats.update({ updatedAt: new Date() }, { where: { id: chatId } });
 
-  // ✅ EMIT NEW MESSAGE
+  //  EMIT NEW MESSAGE
   getIO().to(`chat-${chatId}`).emit("new-message", {
     id: msg.id,
     chatId: msg.chatId,
     senderId: msg.senderId,
-    content: emoji, // ✅ Original emoji
+    content: emoji, //  Original emoji
     type: msg.type,
     createdAt: msg.createdAt,
     isEdited: false,
@@ -666,7 +654,7 @@ const sendStickerMessage = async (chatId, userId, emoji) => {
     mimeType: null,
   });
 
-  // ✅ CHECK IF DELIVERED TO SOMEONE ONLINE
+  //  CHECK IF DELIVERED TO SOMEONE ONLINE
   const deliveredToSomeone = members.some((m) => isUserOnline(m.userId));
 
   if (deliveredToSomeone) {
@@ -676,7 +664,7 @@ const sendStickerMessage = async (chatId, userId, emoji) => {
     });
   }
 
-  // ✅ UPDATE CHAT LIST for all members
+  //  UPDATE CHAT LIST for all members
   const chatMembers = await GroupMembers.findAll({
     where: {
       chatId,
@@ -703,7 +691,7 @@ const sendStickerMessage = async (chatId, userId, emoji) => {
       });
   });
 
-  // ✅ SEND NOTIFICATION
+  //  SEND NOTIFICATION
   await notifyOnNewMessage(chatId, userId, "Sticker");
 
   return msg;

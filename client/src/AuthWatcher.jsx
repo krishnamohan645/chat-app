@@ -14,7 +14,7 @@ const AuthWatcher = () => {
   useEffect(() => {
     if (authLoading) return;
 
-    // ⛔ Allow public auth routes
+    //  Allow public auth routes
     const publicRoutes = [
       "/login",
       "/register",
@@ -34,7 +34,7 @@ const AuthWatcher = () => {
     });
   }, [authLoading, isAuthenticated, location.pathname, navigate]);
 
-  // 🔹 Register device after login
+  //  Register device after login
   useEffect(() => {
     if (!isAuthenticated) return;
 

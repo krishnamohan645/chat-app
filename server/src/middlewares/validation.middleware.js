@@ -2,7 +2,7 @@ const authValidation = (req, res, next) => {
   // console.log("BODY:", req.body);
   // console.log("FILE:", req.file);
 
-  // 🔒 HARD SAFETY
+  //  HARD SAFETY
   if (!req.body) {
     return res.status(400).json({
       message: "Request body is missing",

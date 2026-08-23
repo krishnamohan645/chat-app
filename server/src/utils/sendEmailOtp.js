@@ -23,7 +23,7 @@
 const axios = require("axios");
 
 const sendEmailOtp = async (email, otp) => {
-  console.log("📧 SENDING OTP VIA PROMAILER:");
+  console.log(" SENDING OTP VIA PROMAILER:");
   console.log("   To:", email);
   console.log("   OTP:", otp);
 
@@ -66,13 +66,13 @@ const sendEmailOtp = async (email, otp) => {
       },
     );
 
-    console.log("✅ EMAIL SENT SUCCESSFULLY VIA PROMAILER");
+    console.log("EMAIL SENT SUCCESSFULLY VIA PROMAILER");
     console.log("   Success:", response.data.success);
     console.log("   Message ID:", response.data.data?.messageId);
 
     return response.data;
   } catch (error) {
-    console.error("❌ PROMAILER API ERROR:");
+    console.error("PROMAILER API ERROR:");
     console.error("   Message:", error.message);
 
     if (error.response) {

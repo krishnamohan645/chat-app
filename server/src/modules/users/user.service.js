@@ -18,7 +18,7 @@ const updateProfile = async (userId, data) => {
   const user = await Users.findByPk(userId);
   if (!user) throw new Error("User not found");
 
-  // ✅ Handle profile image upload
+  //  Handle profile image upload
   let newProfileImg = profile_img;
   let newCloudinaryId = user.cloudinaryId;
 

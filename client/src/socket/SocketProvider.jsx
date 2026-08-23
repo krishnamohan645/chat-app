@@ -10,7 +10,7 @@
 //   const dispatch = useDispatch();
 //   const { token, isAuthenticated } = useSelector((state) => state.auth);
 
-//   // ✅ Initialize socket when authenticated
+//   //  Initialize socket when authenticated
 //   useEffect(() => {
 //     if (!isAuthenticated || !token) return;
 
@@ -33,7 +33,7 @@
 
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { disconnectSocket, initSocket, getSocket } from "./socket";
+import { disconnectSocket, initSocket } from "./socket";
 import {
   registerSocketListeners,
   resetSocketListeners,
@@ -51,15 +51,15 @@ const SocketProvider = ({ children }) => {
 
     if (!socket) return;
 
-    // ✅ Register listeners AFTER socket connects
+    //  Register listeners AFTER socket connects
     const handleConnect = () => {
-      console.log("✅ Socket connected, now registering listeners");
+      console.log(" Socket connected, now registering listeners");
       registerSocketListeners(dispatch);
     };
 
     // If already connected, register immediately
     if (socket.connected) {
-      console.log("✅ Socket already connected, registering listeners");
+      console.log(" Socket already connected, registering listeners");
       registerSocketListeners(dispatch);
     } else {
       // Wait for connection
@@ -67,7 +67,7 @@ const SocketProvider = ({ children }) => {
     }
 
     return () => {
-      console.log("🔌 Disconnecting socket");
+      console.log(" Disconnecting socket");
       socket.off("connect", handleConnect);
       disconnectSocket();
       resetSocketListeners();

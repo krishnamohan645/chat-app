@@ -502,7 +502,7 @@ const searchChats = async (userId, search) => {
 };
 
 const getChatList = async (userId) => {
-  // ✅ Fetch ALL chats the user was ever part of (active + left groups)
+  //  Fetch ALL chats the user was ever part of (active + left groups)
   const memberships = await GroupMembers.findAll({
     where: { userId },
     attributes: ["chatId", "leftAt"],
@@ -530,7 +530,7 @@ const getChatList = async (userId) => {
     // For private chats, skip if user has left (private chats don't need "view after leave")
     if (chat.type === "private" && userLeftAt) continue;
 
-    // ✅ Exclude system messages from last message preview
+    //  Exclude system messages from last message preview
     const lastMessage = await Messages.findOne({
       where: {
         chatId: chat.id,
@@ -664,7 +664,7 @@ const getChatList = async (userId) => {
 };
 
 const getSingleChat = async (chatId, userId) => {
-  // ✅ Allow left members to view the chat (read-only)
+  //  Allow left members to view the chat (read-only)
   const membership = await GroupMembers.findOne({ where: { chatId, userId } });
   if (!membership) throw new Error("Chat not found");
 
@@ -678,7 +678,7 @@ const getSingleChat = async (chatId, userId) => {
     isBlockedByMe: false,
     hasBlockedMe: false,
     otherUserId: null,
-    hasLeft: !!membership.leftAt, // ✅ tells frontend if user has left
+    hasLeft: !!membership.leftAt, //  tells frontend if user has left
     leftAt: membership.leftAt || null,
   };
 

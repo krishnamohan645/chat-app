@@ -17,12 +17,12 @@ const sendPushToUser = async (userId, payload) => {
 
   if (!devices.length) return;
 
-  // ✅ 1. deduplicate tokens
+  //  1. deduplicate tokens
   const tokens = [...new Set(devices.map((d) => d.pushToken).filter(Boolean))];
 
   if (!tokens.length) return;
 
-  // ✅ 2. chunk into max 500
+  //  2. chunk into max 500
   const tokenChunks = chunkArray(tokens, 500);
 
   for (const chunk of tokenChunks) {
@@ -37,7 +37,7 @@ const sendPushToUser = async (userId, payload) => {
 
     const response = await admin.messaging().sendEachForMulticast(message);
 
-    // ✅ 3. cleanup invalid tokens
+    //  3. cleanup invalid tokens
     response.responses.forEach(async (res, idx) => {
       if (!res.success) {
         const errorCode = res.error?.code;

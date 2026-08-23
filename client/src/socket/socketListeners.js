@@ -4,7 +4,7 @@ import {
   updateLastMessage,
   setTypingUser,
   removeTypingUser,
-  setActiveChat, // ✅ Add this import
+  setActiveChat, //  Add this import
 } from "../features/chats/chatSlice";
 import {
   addMessage,
@@ -39,26 +39,26 @@ let listenersRegistered = false;
 
 export const registerSocketListeners = (dispatch) => {
   if (listenersRegistered) {
-    console.log("⚠️ Socket listeners already registered, skipping");
+    console.log(" Socket listeners already registered, skipping");
     return;
   }
 
   const socket = getSocket();
   if (!socket) {
-    console.error("❌ Socket not available for listener registration");
+    console.error(" Socket not available for listener registration");
     return;
   }
 
   if (!socket.connected) {
-    console.warn("⚠️ Socket not connected yet, listeners may not work");
+    console.warn(" Socket not connected yet, listeners may not work");
   }
 
   listenersRegistered = true;
-  console.log("✅ Registering socket listeners on socket ID:", socket.id);
+  console.log(" Registering socket listeners on socket ID:", socket.id);
 
   // CHAT LIST
   socket.on("chat-list:update", (payload) => {
-    console.log("📨 chat-list:update received:", payload);
+    console.log(" chat-list:update received:", payload);
 
     const state = store.getState();
     const myUserId = state.auth.user?.id;
@@ -71,7 +71,7 @@ export const registerSocketListeners = (dispatch) => {
     );
     dispatch(incrementUnread(payload));
 
-    // ✅ If this is a group, also update group slice
+    //  If this is a group, also update group slice
     if (payload.type === "group") {
       dispatch(
         updateGroupLastMessage({
@@ -93,7 +93,7 @@ export const registerSocketListeners = (dispatch) => {
 
   // NEW MESSAGE
   socket.on("new-message", (msg) => {
-    console.log("📩 new-message received:", msg);
+    console.log(" new-message received:", msg);
     dispatch(addMessage(msg));
   });
 
@@ -125,35 +125,35 @@ export const registerSocketListeners = (dispatch) => {
 
   // TYPING START
   socket.on("typing:start", ({ chatId, userId }) => {
-    console.log("🎯🎯🎯 typing:start LISTENER FIRED!", { chatId, userId });
+    console.log(" typing:start LISTENER FIRED!", { chatId, userId });
     console.log("Socket ID that received:", socket.id);
 
     const myUserId = store.getState().user.user.id;
     console.log("My user ID:", myUserId, "Typer ID:", userId);
 
     if (userId === myUserId) {
-      console.log("⛔ Ignoring - I'm the one typing");
+      console.log(" Ignoring - I'm the one typing");
       return;
     }
 
-    console.log("✅ Dispatching setTypingUser to Redux");
+    console.log(" Dispatching setTypingUser to Redux");
     dispatch(setTypingUser({ chatId: Number(chatId), userId }));
 
     setTimeout(() => {
       const typingState = store.getState().chats.typingUsers;
-      console.log("📊 Redux typingUsers state:", typingState);
+      console.log(" Redux typingUsers state:", typingState);
     }, 50);
   });
 
   // TYPING STOP
   socket.on("typing:stop", ({ chatId, userId }) => {
-    console.log("🎯 typing:stop LISTENER FIRED!", { chatId, userId });
+    console.log(" typing:stop LISTENER FIRED!", { chatId, userId });
     dispatch(removeTypingUser({ chatId: Number(chatId), userId }));
   });
 
-  // ✅ BLOCK STATUS CHANGED (when I block/unblock someone)
+  //  BLOCK STATUS CHANGED (when I block/unblock someone)
   socket.on("block-status-changed", ({ blockedUserId, isBlocked }) => {
-    console.log("🔒 block-status-changed received:", {
+    console.log(" block-status-changed received:", {
       blockedUserId,
       isBlocked,
     });
@@ -162,7 +162,7 @@ export const registerSocketListeners = (dispatch) => {
 
     // Update activeChat if it's the affected user
     if (activeChat && activeChat.otherUserId === blockedUserId) {
-      console.log("✅ Updating activeChat block status");
+      console.log(" Updating activeChat block status");
       dispatch(
         setActiveChat({
           ...activeChat,
@@ -172,15 +172,15 @@ export const registerSocketListeners = (dispatch) => {
     }
   });
 
-  // ✅ BLOCKED BY USER (when someone blocks me)
+  //  BLOCKED BY USER (when someone blocks me)
   socket.on("blocked-by-user", ({ blockerId }) => {
-    console.log("🚫 blocked-by-user received:", { blockerId });
+    console.log(" blocked-by-user received:", { blockerId });
 
     const { activeChat } = store.getState().chats;
 
     // Update activeChat if it's the blocker
     if (activeChat && activeChat.otherUserId === blockerId) {
-      console.log("✅ Someone blocked me - updating activeChat");
+      console.log("Someone blocked me - updating activeChat");
       dispatch(
         setActiveChat({
           ...activeChat,
@@ -190,15 +190,15 @@ export const registerSocketListeners = (dispatch) => {
     }
   });
 
-  // ✅ UNBLOCKED BY USER (when someone unblocks me)
+  //  UNBLOCKED BY USER (when someone unblocks me)
   socket.on("unblocked-by-user", ({ blockerId }) => {
-    console.log("✅ unblocked-by-user received:", { blockerId });
+    console.log(" unblocked-by-user received:", { blockerId });
 
     const { activeChat } = store.getState().chats;
 
     // Update activeChat if it's the unblocker
     if (activeChat && activeChat.otherUserId === blockerId) {
-      console.log("✅ Someone unblocked me - updating activeChat");
+      console.log(" Someone unblocked me - updating activeChat");
       dispatch(
         setActiveChat({
           ...activeChat,
@@ -208,31 +208,31 @@ export const registerSocketListeners = (dispatch) => {
     }
   });
 
-  console.log("✅ All socket listeners registered successfully");
+  console.log(" All socket listeners registered successfully");
 
-  // ✅ GROUP MEMBERS UPDATED (add/remove/leave)
+  //  GROUP MEMBERS UPDATED (add/remove/leave)
   socket.on("group:members-updated", ({ chatId, memberCount }) => {
-    console.log("🔥 BEFORE UPDATE:", store.getState().group.groups);
+    console.log(" BEFORE UPDATE:", store.getState().group.groups);
     console.log("👥 group:members-updated received:", { chatId, memberCount });
     dispatch(updateGroupMemberCount({ chatId: Number(chatId), memberCount }));
     dispatch(getGroupMembersThunk(chatId)); // re-fetch fresh member list
     setTimeout(() => {
-      console.log("🔥 AFTER UPDATE:", store.getState().group.groups);
+      console.log(" AFTER UPDATE:", store.getState().group.groups);
     }, 100);
   });
 
-  // ✅ GROUP SYSTEM MESSAGE (member added/removed/left)
+  //  GROUP SYSTEM MESSAGE (member added/removed/left)
   socket.on("receive-message", (msg) => {
-    console.log("📩 receive-message (group system):", msg);
+    console.log(" receive-message (group system):", msg);
     if (msg.type === "system") {
       dispatch(addMessage(msg));
     }
   });
 
   socket.on("new-notification", (notification) => {
-    console.log("🔔 new-notification received:", notification);
+    console.log(" new-notification received:", notification);
 
-    // ✅ FIX: Changed addNotification to addNotificationRealtime
+    //  FIX: Changed addNotification to addNotificationRealtime
     dispatch(addNotificationRealtime(notification));
 
     // Show browser notification if permission granted
@@ -252,9 +252,9 @@ export const registerSocketListeners = (dispatch) => {
     }
   });
 
-  // ✅ INCOMING CALL
+  //  INCOMING CALL
   socket.on("call:incoming", ({ callId, callerId, type }) => {
-    console.log("📞 call:incoming received:", { callId, callerId, type });
+    console.log(" call:incoming received:", { callId, callerId, type });
 
     // Get caller info from users or fetch
     const state = store.getState();
@@ -285,7 +285,7 @@ export const registerSocketListeners = (dispatch) => {
   });
 
   socket.on("call:started", ({ callId, receiverId, type }) => {
-    console.log("📞 call:started (I'm the caller):", {
+    console.log(" call:started (I'm the caller):", {
       callId,
       receiverId,
       type,
@@ -295,9 +295,9 @@ export const registerSocketListeners = (dispatch) => {
     dispatch(setCurrentCall({ callId, receiverId, type, isCaller: true }));
   });
 
-  // ✅ CALL ACCEPTED
+  //  CALL ACCEPTED
   socket.on("call:accepted", ({ callId }) => {
-    console.log("✅ call:accepted:", callId);
+    console.log(" call:accepted:", callId);
 
     // Stop ringing sound
     if (window.callRingtone) {
@@ -308,9 +308,9 @@ export const registerSocketListeners = (dispatch) => {
     // Handle in call component (it will use WebRTC)
   });
 
-  // ✅ CALL REJECTED
+  //  CALL REJECTED
   socket.on("call:rejected", ({ callId }) => {
-    console.log("❌ call:rejected:", callId);
+    console.log(" call:rejected:", callId);
 
     // Stop ringing sound
     if (window.callRingtone) {
@@ -324,9 +324,9 @@ export const registerSocketListeners = (dispatch) => {
     alert("Call was rejected");
   });
 
-  // ✅ CALL MISSED
+  //  CALL MISSED
   socket.on("call:missed", ({ callId }) => {
-    console.log("📵 call:missed:", callId);
+    console.log(" call:missed:", callId);
 
     dispatch(incrementMissedCount());
     dispatch(clearCurrentCall());
@@ -334,31 +334,31 @@ export const registerSocketListeners = (dispatch) => {
     alert("Call was not answered");
   });
 
-  // ✅ CALL ENDED
+  //  CALL ENDED
 
   socket.on("call:ended", ({ callId }) => {
-    console.log("📴 call:ended received:", callId);
+    console.log(" call:ended received:", callId);
 
-    // ✅ Stop ringtone
+    //  Stop ringtone
     if (window.callRingtone) {
       window.callRingtone.pause();
       window.callRingtone = null;
     }
 
-    // ✅ DESTROY WEBRTC
+    //  DESTROY WEBRTC
     webrtcService.destroy();
 
-    // ✅ Clear redux
+    //  Clear redux
     dispatch(clearIncomingCall());
     dispatch(clearCurrentCall());
 
-    // ✅ Force leave call screen
+    //  Force leave call screen
     window.location.href = "/chats";
     // or use navigate if accessible
   });
-  // ✅ CALL UNAVAILABLE
+  //  CALL UNAVAILABLE
   socket.on("call:unavailable", ({ reason }) => {
-    console.log("⚠️ call:unavailable:", reason);
+    console.log(" call:unavailable:", reason);
 
     const messages = {
       USER_OFFLINE: "User is offline",
@@ -384,10 +384,10 @@ export const registerSocketListeners = (dispatch) => {
   const events = Object.keys(socket._callbacks || {}).map((e) =>
     e.replace("$", ""),
   );
-  console.log("📋 Registered socket events:", events);
+  console.log(" Registered socket events:", events);
 };
 
 export const resetSocketListeners = () => {
-  console.log("🔄 Resetting socket listeners flag");
+  console.log(" Resetting socket listeners flag");
   listenersRegistered = false;
 };
