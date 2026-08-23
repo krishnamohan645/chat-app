@@ -9,7 +9,8 @@ const Profile = () => {
   const { userId } = useParams(); // optional
   const dispatch = useDispatch();
 
-  const { user, selectedUser, loading } = useSelector((state) => state.user);
+  const { user, loading ,selectedUser} = useSelector((state) => state.user);
+  console.log(selectedUser, "selectedUser in profile");
   const { token } = useSelector((state) => state.auth);
 
   const isMyProfile = !userId;
@@ -45,6 +46,8 @@ const Profile = () => {
     createdAt,
     profile_img,
   } = profileData;
+
+  // console.log(profileData.user.username, "profileData in profile page");
 
   const joinedDate = new Date(createdAt).toLocaleDateString("en-IN", {
     month: "long",

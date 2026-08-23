@@ -21,7 +21,8 @@ const TopNav = ({ onMenuClick, unreadNotifications = 0 }) => {
   const avatarUrl = user?.profile_img
     ? // ? `${API_BASE_URL}${user.profile_img}`
       user.profile_img
-    : null;
+    : // user.profile_img
+      null;
 
   const initials = user?.username ? user.username.charAt(0).toUpperCase() : "U";
 

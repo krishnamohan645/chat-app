@@ -241,7 +241,7 @@ const userSlice = createSlice({
       })
       .addCase(getUserProfile.fulfilled, (state, action) => {
         state.loading = false;
-        state.selectedUser = action.payload;
+        state.selectedUser = action.payload.user;
       })
       .addCase(getUserProfile.rejected, (state) => {
         state.loading = false;
